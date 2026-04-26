@@ -1,0 +1,14 @@
+/*
+  X-Powered-By: PHP/8.1
+  X-Pingback: https://wp-design.org/xmlrpc.php
+
+/wp-json/*
+  Content-Type: application/json; charset=UTF-8
+  Access-Control-Allow-Origin: *
+  Access-Control-Expose-Headers: X-WP-Total, X-WP-TotalPages
+
+/xmlrpc.php
+  Content-Type: text/xml; charset=UTF-8
+
+/wp-login.php
+  Content-Type: text/html; charset=UTF-8
