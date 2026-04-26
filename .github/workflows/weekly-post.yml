@@ -1,0 +1,33 @@
+name: Weekly Post Generation
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'   # every Monday, 10:00 UTC
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate post
+        run: node scripts/generate-post.mjs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Commit and push
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add content/posts/ public/illustrations/
+          git diff --staged --quiet || (git commit -m "content: add weekly auto post" && git push)

@@ -1,0 +1,15 @@
+export const siteConfig = {
+  name: "WP Design",
+  tagline: "Inspiracje i porady dla Twojego wnętrza",
+  url: "https://wp-design.org",
+  description: "WP Design to portal o aranżacji wnętrz, designie i stylu życia. Inspiracje, porady i trendy dla polskich czytelników.",
+  language: "pl",
+  moneyPageUrl: "https://vulkankasyno.pl",
+  moneyPageAnchor: "Vulkan Vegas",
+  moneyPageAnchorAlt: "najlepsze kasyno online",
+  moneyPageBonus: "bonus powitalny do 4000 PLN",
+  featuredPostSlug: "najlepsze-kasyna-online-dla-graczy",
+  author: "Redakcja WP Design",
+  wpVersion: "6.5.2",
+  wpTheme: "wpdesign-theme",
+}
