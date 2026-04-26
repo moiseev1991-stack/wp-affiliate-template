@@ -154,15 +154,67 @@ Style requirements:
 Return ONLY the SVG markup starting with <svg ...> and ending with </svg>.`,
     },
   ]
-  const raw = await callOpenAI({ messages, jsonMode: false, maxTokens: 2000 })
-  let svg = raw.trim()
-  svg = svg.replace(/^```(?:svg|xml)?\s*/i, '').replace(/```\s*$/i, '').trim()
-  if (!svg.startsWith('<svg')) {
-    throw new Error(`SVG response did not start with <svg: ${svg.slice(0, 200)}`)
+  let svg = ''
+  try {
+    const raw = await callOpenAI({ messages, jsonMode: false, maxTokens: 2000 })
+    svg = raw.trim()
+    svg = svg.replace(/^```(?:svg|xml)?\s*/i, '').replace(/```\s*$/i, '').trim()
+    if (!svg.startsWith('<svg')) {
+      console.warn('  SVG response invalid, falling back to placeholder')
+      svg = ''
+    }
+  } catch (err) {
+    console.warn('  SVG generation failed, falling back to placeholder:', err.message)
+  }
+  if (!svg) {
+    svg = buildFallbackSvg({ slug, emoji })
   }
   const outPath = path.join(ILLUSTRATIONS_DIR, `${slug}.svg`)
   fs.writeFileSync(outPath, svg, 'utf-8')
   return `/illustrations/${slug}.svg`
+}
+
+function buildFallbackSvg({ slug, emoji }) {
+  const palette = {
+    '🎰': ['#1b4332', '#2d6a4f', '#ffd166'],
+    '🪟': ['#134e4a', '#0f766e', '#5eead4'],
+    '🪵': ['#1b4332', '#2d6a4f', '#d4a373'],
+    '🎨': ['#312e81', '#4338ca', '#fbbf24'],
+    '🌿': ['#14532d', '#15803d', '#86efac'],
+    '💻': ['#1e3a5f', '#1d4ed8', '#60a5fa'],
+    '✨': ['#78350f', '#d97706', '#fde68a'],
+    '🍳': ['#7c2d12', '#c2410c', '#fdba74'],
+    '💡': ['#365314', '#4d7c0f', '#fef08a'],
+  }
+  const [c1, c2, accent] = palette[emoji] ?? ['#1e293b', '#334155', '#94a3b8']
+  let hash = 0
+  for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0
+  const cx = 160
+  const cy = 80
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="bg-${hash}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${c1}"/>
+      <stop offset="100%" stop-color="${c2}"/>
+    </linearGradient>
+    <pattern id="dots-${hash}" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="1" fill="white" fill-opacity="0.15"/>
+    </pattern>
+  </defs>
+  <rect width="320" height="180" fill="url(#bg-${hash})"/>
+  <rect width="320" height="180" fill="url(#dots-${hash})"/>
+  <circle cx="${cx}" cy="${cy}" r="44" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.25" stroke-width="1.5"/>
+  <circle cx="${cx}" cy="${cy}" r="28" fill="${accent}" fill-opacity="0.55"/>
+  <circle cx="${cx}" cy="${cy}" r="14" fill="white" fill-opacity="0.7"/>
+  <g stroke="white" stroke-opacity="0.4" stroke-linecap="round" stroke-width="1.5">
+    <line x1="24" y1="24" x2="32" y2="24"/><line x1="28" y1="20" x2="28" y2="28"/>
+    <line x1="296" y1="24" x2="304" y2="24"/><line x1="300" y1="20" x2="300" y2="28"/>
+    <line x1="24" y1="156" x2="32" y2="156"/><line x1="28" y1="152" x2="28" y2="160"/>
+    <line x1="296" y1="156" x2="304" y2="156"/><line x1="300" y1="152" x2="300" y2="160"/>
+  </g>
+  <rect x="0" y="160" width="320" height="20" fill="black" fill-opacity="0.25"/>
+  <rect x="120" y="167" width="80" height="6" rx="3" fill="${accent}" fill-opacity="0.7"/>
+</svg>`
 }
 
 async function generateOutline({ title, description }) {
