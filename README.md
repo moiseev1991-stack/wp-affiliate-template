@@ -9,7 +9,7 @@ Reusable template for an SEO affiliate blog with monthly auto-generated articles
 - Static Next.js site that emulates WordPress on the surface (`/wp-login.php`, `/xmlrpc.php`, `/wp-json/`, WP body classes, `<meta generator="WordPress 6.5.2">`). Useful camouflage for SEO.
 - Flat URL structure — articles live at `/<slug>/`, no `/blog/` prefix.
 - Home page: 10-card grid. Slot 1 = first money article (brand pin); slots 4 and 7 = the other two money-featured articles. Other slots = latest non-money articles.
-- 5 money articles per site (configurable list in `lib/config.ts`). Their excerpts include a Vulkan-style anchor link to the money page; their bodies open with the brand link in the first paragraph (above the fold).
+- **Outbound money-link policy**: hard-capped at **8 links across 6 pages per site** — 3 anchors on home (cards in featured slots 1, 4, 7) + 1 link in the first paragraph of each of the 5 money articles. Every other article on the site has **zero** outbound money links and shows the brand as plain text (no bold-without-link). Configured in `siteConfig.moneyArticleSlugs` (5 entries; first 3 also become home-featured cards). Enforced at render time by `lib/internal-links.ts.enforceMoneyLinkPolicy`.
 - 5 internal links injected automatically into every article body via `lib/internal-links.ts` — round-robin across the corpus, biased toward money articles for SEO juice flow.
 - Per-site visual identity: `scripts/randomize-theme.mjs` rewrites `:root` CSS variables with a niche-anchored, seed-randomized palette. Two sites in the same niche will not look identical.
 - 9 emoji-themed categories (`lib/categories.ts`) with category archive pages at `/kategoria/<slug>/`.

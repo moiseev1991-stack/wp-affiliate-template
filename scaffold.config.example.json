@@ -1,6 +1,9 @@
 {
   "_comment": "Copy this file to scaffold.config.json and fill in real values. Then run: node scripts/scaffold.mjs",
 
+  "_link_policy": "Every site produced by the scaffold ships with a hard-capped money-link policy: 3 anchors on the home page (in featured cards 1/4/7) + 1 link in the first paragraph of each of the 5 money articles = 8 outbound money links across 6 pages, period. Every other article carries 0 outbound money links and shows the brand as plain text. Enforced at render time by lib/internal-links.ts; cannot be bypassed by the article generator.",
+
+
   "domain": "example.pl",
   "language": "pl",
   "languageName": "Polish",

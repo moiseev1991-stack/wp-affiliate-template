@@ -1,6 +1,6 @@
 import type { Post } from '@/lib/posts'
 import { siteConfig } from '@/lib/config'
-import { isMoneyArticleSlug, featuredHomeSlugs } from '@/lib/money'
+import { isMoneyArticleSlug } from '@/lib/money'
 
 const FALLBACK_LEAD: Record<string, (anchor: string, url: string) => string> = {
   pl: (a, u) => ` Sprawdź pełną recenzję na [${a}](${u}).`,
@@ -58,11 +58,12 @@ export function pickInternalTargets(currentSlug: string, all: Post[], count = 5)
 export function processArticleBody(content: string, currentSlug: string, all: Post[]): string {
   let out = content
 
-  // Money links live ONLY on the 3 home-featured posts (one per page,
-  // first paragraph). Every other article: strip all money links and
-  // strip the bold formatting on the brand so it reads as plain text.
-  const isFeaturedMoney = (featuredHomeSlugs() as readonly string[]).includes(currentSlug)
-  out = enforceMoneyLinkPolicy(out, isFeaturedMoney)
+  // Money links live ONLY on the 5 money articles (siteConfig.moneyArticleSlugs).
+  // Each of those 5 gets exactly ONE link in the first paragraph. The first 3
+  // of them are also home-featured cards (3 anchors on the home page).
+  // Every other article: strip all money links and strip the bold formatting
+  // on the brand so it reads as plain text — never bold-without-link.
+  out = enforceMoneyLinkPolicy(out, isMoneyArticleSlug(currentSlug))
 
   // Inject 5 internal links — find keyword matches from target titles in the body
   // and replace the first occurrence with a markdown link. Skip text already

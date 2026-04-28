@@ -53,6 +53,27 @@ Stream stdout/stderr to the user. The orchestrator handles everything:
 - `wrangler deploy`
 - final report
 
+## Money-link policy (enforced at render time by `lib/internal-links.ts`)
+
+Every site produced by this skill ships with the same hard-capped outbound link policy:
+
+| Surface                                | Money links | Notes                                              |
+| -------------------------------------- | ----------- | -------------------------------------------------- |
+| Home page (1 page, 10 cards)           | **3**       | Anchors in card excerpts on slots 1, 4, 7          |
+| 5 money articles (1 link each)         | **5**       | Each has exactly one link in the FIRST paragraph   |
+| All other articles + categories + about/contact/privacy | **0** | Zero outbound money links. Brand reads as plain text — no bold-without-link, no underline. |
+| **Total per site**                     | **8 links across 6 pages** | |
+
+The 5 money articles are listed in `siteConfig.moneyArticleSlugs` (set by the orchestrator at scaffold time). The first 3 of those 5 also appear in `siteConfig.featuredPostSlugs` and become home-grid cards. The remaining 2 carry only the body link without a home placement.
+
+The render-time helper `enforceMoneyLinkPolicy` in `lib/internal-links.ts`:
+1. Strips every existing markdown link to `siteConfig.moneyPageUrl` from the body of every article (kills any extra links auto-generated content may have inserted, e.g. in editor's-pick sections).
+2. On a money article: places exactly one link in the first paragraph (links the first **Brand** bold mention, falls back to first plain mention, falls back to appending a localized lead-out sentence).
+3. On any non-money article: also strips bold formatting on every brand mention so it reads as plain prose.
+4. Internal cross-linking between articles still works via `pickInternalTargets` — those links go to other site pages, never to the money URL.
+
+Do NOT change this policy from the skill. If a future site needs a different ratio (e.g. 3 money articles instead of 5, or 0 home links), edit `lib/money.ts` and `lib/config.ts.moneyArticleSlugs` after scaffolding — but only if the user explicitly asks.
+
 If the orchestrator exits non-zero, surface the error verbatim and stop. Do NOT try to recover by asking questions. The user fixes the env/config and reruns.
 
 ## Hard rules — never break
