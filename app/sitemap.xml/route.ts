@@ -1,28 +1,43 @@
 import { getAllPosts } from '@/lib/posts'
 import { siteConfig } from '@/lib/config'
+import { CATEGORIES } from '@/lib/categories'
+
+const ABOUT_SLUG: Record<string, string> = { pl: 'o-nas', en: 'about', de: 'ueber-uns', cs: 'o-nas', sk: 'o-nas' }
+const CONTACT_SLUG: Record<string, string> = { pl: 'kontakt', en: 'contact', de: 'kontakt', cs: 'kontakt', sk: 'kontakt' }
+const PRIVACY_SLUG: Record<string, string> = { pl: 'polityka-prywatnosci', en: 'privacy-policy', de: 'datenschutz', cs: 'ochrana-osobnich-udaju', sk: 'ochrana-osobnych-udajov' }
 
 export async function GET() {
   const posts = getAllPosts()
   const base = siteConfig.url
+  const lang = siteConfig.language || 'en'
 
-  const staticPages: { url: string; priority: string; changefreq: string; lastmod?: string }[] = [
+  const aboutSlug = ABOUT_SLUG[lang] ?? 'about'
+  const contactSlug = CONTACT_SLUG[lang] ?? 'contact'
+  const privacySlug = PRIVACY_SLUG[lang] ?? 'privacy-policy'
+
+  const staticPages = [
     { url: `${base}/`, priority: '1.0', changefreq: 'weekly' },
-    { url: `${base}/blog/`, priority: '0.9', changefreq: 'daily' },
-    { url: `${base}/o-nas/`, priority: '0.5', changefreq: 'monthly' },
-    { url: `${base}/kontakt/`, priority: '0.5', changefreq: 'monthly' },
-    { url: `${base}/polityka-prywatnosci/`, priority: '0.5', changefreq: 'monthly' },
+    { url: `${base}/${aboutSlug}/`, priority: '0.5', changefreq: 'monthly' },
+    { url: `${base}/${contactSlug}/`, priority: '0.5', changefreq: 'monthly' },
+    { url: `${base}/${privacySlug}/`, priority: '0.5', changefreq: 'monthly' },
   ]
 
-  const postEntries: { url: string; priority: string; changefreq: string; lastmod?: string }[] = posts.map(p => ({
-    url: `${base}/blog/${p.slug}/`,
+  const categoryPages = CATEGORIES.map(c => ({
+    url: `${base}/kategoria/${c.slug}/`,
+    priority: '0.7',
+    changefreq: 'weekly',
+  }))
+
+  const postEntries = posts.map(p => ({
+    url: `${base}/${p.slug}/`,
     priority: '0.8',
     changefreq: 'monthly',
     lastmod: p.date,
   }))
 
-  const allEntries = [...staticPages, ...postEntries]
+  const allEntries = [...staticPages, ...categoryPages, ...postEntries]
 
-  const urlsXml = allEntries.map(e => `
+  const urlsXml = allEntries.map((e: any) => `
   <url>
     <loc>${e.url}</loc>
     ${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ''}

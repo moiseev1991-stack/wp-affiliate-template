@@ -1,216 +1,184 @@
 ---
 name: scaffold-site
-description: Bootstrap a new affiliate-blog site from this template. Asks the user for domain, language, niche, money-page details, target GitHub repo, and a starter money article, then reskins all template files locally and (optionally) pushes to a GitHub repo the user already prepared. Does NOT create a new GitHub repo or auto-deploy. Trigger when the user says "scaffold a new site", "/scaffold-site", "create new site from this template", or first opens this folder fresh.
+description: Bootstrap a new affiliate-blog site from this template fully autonomously. Inputs domain, donor URL, language, niche, page count, money-page, and target GitHub repo — outputs a reskinned, content-complete (default 50 articles), unique-look site, pushed to the user-provided GitHub repo, with monthly auto-generation wired up. Trigger when the user says "scaffold a new site", "/scaffold-site", or first opens this folder fresh on a server.
 ---
 
-# Scaffold-site skill
+# Scaffold-site skill (autonomous edition)
 
-You turn a fresh checkout of `wp-affiliate-template` into a working affiliate site **locally** and (optionally) push it to a GitHub repo the user has already created. You do NOT create new GitHub repos or auto-deploy. The user controls when and where deploy happens.
+You take a fresh checkout of `wp-affiliate-template` and produce a complete, deployed-ready affiliate site without any interactive confirmation steps. This skill is designed to run on a remote server where there is no human to click "next/next/next". Your job: take inputs once, then execute the full pipeline silently end-to-end.
 
-## What the resulting site does
+## Inputs — collected in ONE batch only
 
-- Static Next.js site that **emulates WordPress** on the surface: `/wp-login.php`, `/xmlrpc.php`, `/wp-json/...` stub endpoints, WordPress-style HTML classes (`wordpress home blog`, `wp-block-post-content`, `entry-title`, etc.), `<meta name="generator" content="WordPress 6.5.2">`, neve-style.css link, wp-emoji-release.min.js bootstrap. **Do not remove this emulation** — it's intentional and useful for SEO.
-- Money article (the affiliate target) is **always pinned first** on the homepage preview, regardless of date — driven by `siteConfig.featuredPostSlug` consumed in `app/page.tsx`.
-- All other articles are sorted by date descending and shown right after the money article.
-- Weekly auto-post GitHub Action writes a new SEO article using `gpt-4o`, generates an SVG illustration, and commits — once it's pushed and a secret is set.
+If the user has already supplied inputs (env vars, args, or just told you in the prompt), parse them and skip prompting. Otherwise, use ONE `AskUserQuestion` call with all of the following — do not ask in serial rounds.
 
-## Step 0 — Sanity check
+Required:
+1. **Domain** — e.g. `example.pl`. No protocol, no trailing slash.
+2. **Language** — ISO 639-1 (`pl`, `en`, `de`, `cs`, `sk`, ...).
+3. **Niche** — one of `casino`, `sports`, `crypto`, `health`, `design`, `generic`. (Affects palette range and topic seed.)
+4. **Money page** — three pipe-separated parts: `URL | brand anchor | bonus phrase`. Example: `https://vulkankasyno.pl | Vulkan Vegas | 100% bonus do 4000 PLN`. The brand anchor is the exact text that becomes a clickable link in articles and previews.
+5. **Donor site URL** — competitor / reference site. Used only as cue for niche/style. Single fetch, no crawling.
+6. **GitHub repo** — full URL or `owner/name` form. The repo must exist (do NOT create it). Push target.
+7. **Page count** — total number of articles to generate at scaffold time. Default `50`.
 
-Before doing anything, confirm:
-- `lib/config.ts` exists in cwd (this is the template).
-- `.git` does NOT exist OR `git remote -v` is empty / points at `wp-affiliate-template`. If the user is running this on a repo that already has a real remote pointing somewhere else, **abort** and ask them to confirm — they may be running it in the wrong folder.
+Optional:
+8. **Target deploy** — `cloudflare-workers` (default) or `pages-only` (just push code, skip deploy).
 
-## Step 1 — Ask the user (5 questions in one AskUserQuestion call)
-
-Use the **AskUserQuestion** tool. Ask all five in a single call. Do NOT proceed without answers.
-
-1. **Domain** — header `Custom domain`, multiSelect `false`, free-text via "Other". Example: `gambling-pl.org`. No `https://`, no trailing slash.
-2. **Language** — header `Content language`, multiSelect `false`, options:
-   - `pl — Polish`
-   - `en — English`
-   - `de — German`
-   - `cs — Czech`
-   - `sk — Slovak`
-   - `Other (free-text)`
-   Use the ISO 639-1 two-letter code in config.
-3. **Niche** — header `Niche / topic`, multiSelect `false`, options:
-   - `Online casino affiliate`
-   - `Sports betting affiliate`
-   - `Crypto / trading affiliate`
-   - `Interior design + casino crossover (like wp-design)`
-   - `Health / supplements affiliate`
-   - `Other (free-text — describe the niche in 1-2 sentences)`
-4. **Money page** — header `Affiliate target`, multiSelect `false`, free-text via "Other". Ask for: URL + brand anchor + short bonus phrase, e.g. `https://example.com | BrandName | bonus 100% up to $500`. Parse the three parts on `|`.
-5. **GitHub destination** — header `Where to push`, multiSelect `false`, options:
-   - `Existing GitHub repo (free-text — paste full URL or owner/name)`
-   - `Don't push — just prepare files locally`
-   The user creates the repo themselves on github.com BEFORE this step. Do NOT create the repo for them. If they pick "Don't push", skip Steps 4 and 5 entirely.
-
-After answers, also derive:
-- `siteName` — short brand name, derive from domain (e.g. `gambling-pl.org` → `Gambling PL`).
-- `tagline` — short tagline in the chosen language matching the niche. Generate it yourself.
+After parsing, derive:
+- `siteName` — short brand name from the domain (`example.pl` → `Example`).
+- `tagline` — niche-appropriate tagline in the chosen language. Generate it.
 - `description` — 1-2 sentence meta description in the chosen language.
-- `repoName` — slugify the domain: `gambling-pl.org` → `gambling-pl`.
-- `featuredPostSlug` — slug of the starter money article (Step 2.18), e.g. `najlepsze-kasyna-online-${repoName}` or `best-${niche}-${year}`. Just pick something descriptive matching the language.
+- `repoName` — slugified domain (`example.pl` → `example-pl`).
 
-Confirm the derived values back to the user in one message and let them correct before proceeding. (One round of confirmation only — don't loop.)
+Do NOT confirm derived values. Just write them. The user can correct via a follow-up edit.
 
-## Step 2 — Rewrite project files
+## Pipeline — execute steps in order, no prompting between steps
 
-Use Edit / Write to update these files. Match the chosen language for ALL user-facing strings.
+### Step 1 — Donor probe
+```
+node scripts/scrape-donor.mjs --url <donor URL>
+```
+Writes `scripts/donor.json`. Use the `title`, `description`, `keywords`, and `h2s` as additional context when writing the article batch. Non-fatal — proceed even if the fetch fails.
 
-### 2.1 `lib/config.ts`
+### Step 2 — Visual reskin (per-site uniqueness)
+```
+node scripts/randomize-theme.mjs --niche <niche> --seed <domain>
+```
+This rewrites `:root` in `app/globals.css` with niche-anchored but seed-randomized colors. Two scaffolded sites in the same niche will not look identical.
 
-Replace the whole file. Fields: `name`, `tagline`, `url`, `description`, `language`, `moneyPageUrl`, `moneyPageAnchor`, `moneyPageAnchorAlt`, `moneyPageBonus`, `featuredPostSlug` (set to the starter money-article slug from Step 1), `author` (e.g. "Editorial team" in chosen language), `wpVersion: "6.5.2"`, `wpTheme: "neve"`. Keep the existing shape — only swap values.
+### Step 3 — Update `lib/config.ts`
 
-### 2.2 `app/layout.tsx`
+Fill in `siteConfig` — name, tagline, url, description, language, money fields, donor, themeSeed (set to the seed used in Step 2). Leave `moneyArticleSlugs` empty for now; populated in Step 5.
 
-- The `<html lang="...">` already reads from `siteConfig.language`. Verify nothing else needs touching.
-- **Do not remove the WordPress emulation** in `<head>` (wp-emoji-release script, dashicons.min.css, neve style.css link, generator meta, xmlrpc/wp-json link rels, wordpress body classes). These give the WP look in view-source.
+### Step 4 — Update categories and i18n
 
-### 2.3 `app/page.tsx`
+Update `lib/categories.ts` to match the niche (labels in target language; descriptions in target language). Keep the 9-category structure and emoji set so PostCard's THEMES still match.
 
-- Update `homeTitle` and `homeDescription` to be on-niche in the chosen language. Mirror the Vegas-style tone of the template if the niche is gambling. Otherwise generic.
-- Translate the headings ("Najnowsze", "Artykuły i inspiracje", "Wszystkie artykuły", "Stwórz wnętrze swoich marzeń", "Odkryj nasze poradniki...", "Odkryj wszystkie artykuły") to the chosen language.
-- Update the bottom decorative card emoji (🛋️) and copy to suit the niche.
-- Update the featured-post excerpt block (the `customExcerpt` on the featured `PostCard`) to use the new money-page anchor + bonus phrase.
-- **Do not change the article-ordering logic** — the existing `[featuredPost, ...otherPosts]` pattern is exactly what the user wants: money article first regardless of date, others sorted by date desc.
+### Step 5 — Plan the article corpus
 
-### 2.4 `components/Header.tsx`
+Decide:
+- **Page count** = N (default 50).
+- **Money articles** = exactly 5 slugs. These are articles whose body and excerpt feature direct money-page links. Pick titles like:
+  - `<Brand> — full review <year>`
+  - `<Brand> welcome bonus — <bonus phrase> guide`
+  - `<Brand> mobile app — Android / iOS`
+  - `<Brand> VIP / cashback program`
+  - `<Brand> payments & fast withdrawals` (or analogous in chosen language)
+- **Featured home slugs** = first 3 of those 5. They occupy home grid slots 1, 4, 7 (the rest of the home grid pulls from latest non-money articles).
+- **Topic categories** for the remaining N–5 articles: derived from niche + donor h2s. Aim for even distribution across the 9 categories from `lib/categories.ts`.
 
-- Translate `navLinks` labels.
-- Update logo text to derive from new `siteName`.
+Write `scripts/generation.config.json` with the niche-specific values (used by the monthly cron later):
+- `language`, `languageName`, `niche`, `siteName`, `moneyPage*`, `topicCategories`, `allowedEmojis`, `emojiGuide`, `moneyBlockHeading`, `moneyBlockBrief`, `responsibleDisclaimer`, `fallbackPalette` (use the colors from `scripts/theme.json`).
 
-### 2.5 `components/Footer.tsx`
+Update `lib/config.ts` `moneyArticleSlugs` to the 5 chosen slugs.
 
-- Translate brand description, "Nawigacja", "Tematy", and the legal/disclaimer line.
-- Update topic tags to fit the new niche (~6 tags, generated from niche).
-- Update the gambling disclaimer line — keep it for gambling niches, replace with niche-appropriate disclaimer for others (or remove).
+### Step 6 — Generate the article corpus IN-CONVERSATION
 
-### 2.6 `components/MoneyBlock.tsx`
+You (Claude) generate all N articles directly, writing each via the `Write` tool. Do NOT call OpenAI for the initial batch — the user has already given you Anthropic context (you ARE Claude). The OpenAI key is only used by the monthly cron going forward.
 
-- Translate "Polecane Kasyno", "Zagraj teraz →", the bullet features (`Licencja MGA`, `Płatności BLIK`, `Wypłaty 24h`) — adapt to actual money-page features for the niche.
-- Translate the gambling-disclaimer line; replace with niche-appropriate one (or remove for non-gambling).
+For each article:
+- Frontmatter: `title`, `slug`, `date` (random within last 6 months for the corpus to look organic; today for money articles), `description` (≤155 chars), `emoji` (from `ALLOWED_EMOJIS` set in lib/categories), `featured: <true for money articles>`, `image: "/illustrations/<slug>.svg"`.
+- Body: 1600+ words of dense, natural prose in the target language. 8 ## sections + intro + responsible-use disclaimer.
+- For the 5 money articles: include the brand anchor as a clickable link `[Brand](moneyPageUrl)` in the FIRST paragraph (above the fold), and 2-3 more times sprinkled through the body. Mention the bonus phrase verbatim at least once.
+- For non-money articles: do NOT mention the brand more than once. The post-render pipeline will handle linkification automatically; you just write naturally.
+- Ensure every article includes 5 internal-link-friendly keyword phrases from other articles' titles. The post-render `processArticleBody` injects 5 internal links automatically by keyword matching, so writing diverse titles helps.
 
-### 2.7 `components/PostCard.tsx`
+Save each as `content/posts/<slug>.mdx`.
 
-- Translate "Czytaj więcej", "min czytania" (minutes-of-reading label).
-- Translate the THEMES `label` strings to the new language.
-- Update `formatDate` locale (`pl-PL` → matching ISO locale: `en-US`, `de-DE`, `cs-CZ`, ...).
+For SVG illustrations, write a simple deterministic SVG by hand for each (320x180 viewBox, gradient from theme.json colors, central circle, corner accents). Save to `public/illustrations/<slug>.svg`. Do NOT call OpenAI for SVGs in the initial batch — quality of hand-written placeholders is fine, and OpenAI will overwrite them with model-generated SVGs at the next monthly cron run anyway.
 
-### 2.8 `components/Sidebar.tsx`, `components/Breadcrumbs.tsx`, `components/FeaturedCard.tsx`
+### Step 7 — Update navigation and content
 
-- Open each, translate any user-facing Polish strings to the new language.
+- `app/layout.tsx`: keep WordPress emulation; only verify `<html lang>` reflects siteConfig.language.
+- `app/page.tsx`: already uses `featuredHomeSlugs()` and HOME_LIMIT=10. Just translate user-facing strings ("Latest", "Categories", "Browse by topic", "Reviews, bonuses and guides") to the target language.
+- `components/Footer.tsx`: translate brand description, footer headings, topic tags. Add niche-appropriate disclaimer.
+- `components/Sidebar.tsx`, `components/Breadcrumbs.tsx`, `components/MoneyBlock.tsx`, `components/FeaturedCard.tsx`: translate any hardcoded strings.
+- `app/o-nas/page.tsx`, `app/kontakt/page.tsx`, `app/polityka-prywatnosci/page.tsx`: translate body text. If language ≠ pl, rename folders to language-appropriate slugs and update the references in `Header.tsx` (it already maps slugs by language for the canonical 5 languages — extend if user picked a different one).
+- `app/sitemap.xml/route.ts`: update static URL list to match renamed folders + include all generated post slugs.
+- `app/feed/route.ts`: update language code.
+- `public/robots.txt`: replace placeholder `https://example.com/sitemap.xml` with the actual `https://<domain>/sitemap.xml`.
 
-### 2.9 `app/blog/page.tsx`, `app/blog/[slug]/page.tsx`
+### Step 8 — Update infrastructure config
 
-- Translate the page title, "Czytaj również", "Zostaw komentarz", form labels (Imię, E-mail, Komentarz, etc.), category labels, "min czytania", "Kategoria", and any other Polish strings.
-- Update the `formatDate` locale.
-- Update `EMOJI_TO_CATEGORY` and `EMOJI_TO_LABEL` if the niche uses different categories than design + gambling.
+- `package.json`: set `name` to `repoName`.
+- `wrangler.toml`: set worker name to `repoName`. Keep `[assets] directory = "./out"`.
+- `next.config.js`: `output: 'export'` is set; do not change.
+- `.github/workflows/monthly-post.yml`: leave as-is (already monthly + Cloudflare deploy).
 
-### 2.10 `app/o-nas/page.tsx`, `app/kontakt/page.tsx`, `app/polityka-prywatnosci/page.tsx`
+### Step 9 — Build sanity check
 
-- Rename folders if the chosen language is not Polish:
-  - `o-nas` → language-appropriate slug (`about`, `ueber-uns`, `o-nas`, ...)
-  - `kontakt` → language-appropriate slug
-  - `polityka-prywatnosci` → language-appropriate slug (`privacy-policy`, `datenschutz`, `ochrana-osobnich-udaju`, ...)
-- Translate the body content of each page.
-- Update any links that referenced the old folder names (Header.tsx navLinks, Footer.tsx links, sitemap.xml, etc.).
+```
+npm install
+npm run build
+```
+If build fails, fix the errors. Common: missing translations causing JSX issues, unused imports, MDX frontmatter typos. Do NOT proceed to push if build fails.
 
-### 2.11 `app/sitemap.xml/route.ts`
+### Step 10 — Push to GitHub
 
-- Update the static URL list to match the renamed pages.
+```
+git init -b main
+git remote add origin https://<token>@github.com/<owner>/<repo>.git
+git add -A
+git commit -m "feat: initial scaffold for <domain>"
+git push -u origin main
+```
 
-### 2.12 `scripts/generate-post.mjs`
+The token comes from `GITHUB_TOKEN` env var. If unset, fall back to `gh auth token`. If neither — abort and tell the user to set `GITHUB_TOKEN`.
 
-- Update `MONEY_PAGE_URL`, `MONEY_PAGE_ANCHOR`, `MONEY_PAGE_BONUS` constants.
-- Rewrite `TOPIC_CATEGORIES` array to fit the new niche (8–12 categories in the chosen language or English-described).
-- Rewrite the `pickTopic` system + user prompts so they describe the new niche and target language.
-- Rewrite the `generateOutline` and `generateBody` prompts so they instruct the model to write in the chosen language.
-- Update the `moneyBlock` insert text inside `generateBody` to match the new money page.
-- Update the disclaimer instruction at the end of the body prompt for the new niche.
-- Keep `ALLOWED_EMOJIS` — the existing emoji-themed PostCard works for any niche.
-- Verify the SVG fallback at the bottom of `generateSvg` still triggers if the API returns invalid SVG (it writes a minimal placeholder so the post still renders).
+### Step 11 — Set GitHub secrets
 
-### 2.13 `.github/workflows/deploy.yml`
+```
+gh secret set OPENAI_API_KEY -R <owner>/<repo> -b "<key>"
+gh secret set CLOUDFLARE_API_TOKEN -R <owner>/<repo> -b "<token>"
+gh secret set CLOUDFLARE_ACCOUNT_ID -R <owner>/<repo> -b "<id>"
+```
 
-- Update `cname:` to the new domain.
+Read these from env vars: `OPENAI_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. If any is missing, log a warning and skip that secret — the user can set it manually later. Do NOT abort.
 
-### 2.14 `.github/workflows/weekly-post.yml`
+### Step 12 — Initial Cloudflare deploy (if `target_deploy=cloudflare-workers`)
 
-- Leave the cron at `0 10 * * 1` unless the user asked otherwise.
+```
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… npx wrangler deploy
+```
 
-### 2.15 `wrangler.toml`, `next.config.js`, `package.json`
+If both env vars are present, deploy. Otherwise log "skipping initial deploy — set CF env vars and run wrangler deploy manually" and continue.
 
-- `package.json`: update `"name"` to `repoName`.
-- `wrangler.toml`: update worker name to `repoName`.
-- `next.config.js`: no change needed unless the user wants a basePath.
+### Step 13 — Final report
 
-### 2.16 Reset content + illustrations
+Print a single block:
+```
+✓ Scaffold complete for <domain>
+  - <N> articles generated (<count of money articles> with money links)
+  - 3 featured home slots: <slug1>, <slug2>, <slug3>
+  - Theme: <niche> palette, seed <seed>
+  - Pushed to: <owner>/<repo> (commit <sha>)
+  - Live: https://<worker-name>.<account>.workers.dev (if deployed)
+  - Monthly cron: 1st of every month, 09:00 UTC
+  - Custom domain: pending — point DNS to Cloudflare
+```
 
-- Delete the `welcome.mdx` placeholder in `content/posts/` (keep `.gitkeep`).
-- Delete any leftover SVG files in `public/illustrations/` (keep `.gitkeep`).
+## Hard rules — never break these
 
-### 2.17 Generate the starter money article
+- **No interactive confirmations.** One `AskUserQuestion` call max, batched. After that, execute silently end-to-end.
+- **No questions in the middle of execution.** If something is missing (e.g. `GITHUB_TOKEN`), log warn + skip + continue.
+- **Do NOT create the GitHub repo.** It must exist already. If push fails because it doesn't, abort with a clear error telling the user to create it.
+- **Do NOT skip the build.** A broken site is worse than a delayed one.
+- **Do NOT bypass the visual reskin.** Every site must look different. Always run `randomize-theme.mjs`.
+- **Do NOT leave the placeholder English `lib/categories.ts`** if the language is not English — translate it.
+- **Always open `robots.txt` to AI bots.** Never disallow LLM crawlers.
+- **5 money articles, exactly.** First 3 of them go to home featured slots 1/4/7. Don't make it 4 or 6.
+- **Money link in first paragraph of money articles** — non-negotiable. The `processArticleBody` helper enforces this at render time, but write the lead naturally to mention the brand once (the linkifier does the rest).
+- **Don't touch the WordPress emulation** in `app/layout.tsx`, `public/wp-login.php`, `public/wp-json/`, `public/xmlrpc.php`. SEO-useful camouflage.
+- **Don't change `app/[slug]/page.tsx` URL structure to `/blog/<slug>/`.** It's flat by design.
 
-The site needs ONE article from day one (the money article that's always pinned first on the homepage). Write it manually with these fields in the frontmatter:
-- `title` — the chosen-language equivalent of "Best [niche brands] for [country] players — Guide [year]"
-- `slug` — same as `featuredPostSlug` from Step 1
-- `date` — today's ISO date
-- `description` — 140–155 chars, mentions the brand and the bonus
-- `emoji` — `🎰` for gambling, otherwise pick the closest emoji from the ALLOWED_EMOJIS set
-- `featured: true`
-- `image` — `/illustrations/<slug>.svg`
+## Failure recovery
 
-Body: ~1200–1600 words in the chosen language. Mention the brand by name with a link to `moneyPageUrl`. Include sections on: how to choose, bonuses, payment methods, mobile experience, license/security, FAQ. Wrap up with a sponsored disclaimer line.
+If the article generation step (Step 6) crashes mid-batch (e.g. Claude session interruption), the corpus left on disk is still committable. On re-run, the skill should detect existing slugs in `content/posts/`, count them, and only generate the missing ones to reach N. Use:
+```
+const existing = fs.readdirSync('content/posts').filter(f => f.endsWith('.mdx')).length
+const remaining = N - existing
+```
 
-Then generate an SVG illustration for it (320×180, dark gradient, central badge) and save to `public/illustrations/<slug>.svg`. If you don't want to call OpenAI from inside the skill, write the SVG by hand — a simple gradient + circle + corner accents is fine.
+## After scaffolding
 
-### 2.18 `README.md`
-
-- Replace the template README with a short README describing the new site (1 paragraph + how to run dev + how to add `OPENAI_API_KEY` secret + reminder that Pages CNAME and DNS are still pending).
-
-## Step 3 — Sanity build
-
-Run `npm install` (if not already) then `npm run build`. If the build fails, fix the errors before continuing — typical issues: missing translations causing broken JSX, unused imports, MDX frontmatter typos.
-
-## Step 4 — Push to GitHub (only if user picked "Existing GitHub repo")
-
-If user picked "Don't push", **skip this step** and Step 5. Tell them they're done locally and can `git init && git remote add origin <url> && git push` whenever they're ready.
-
-If user provided a repo URL:
-1. Run `node scripts/bootstrap-github.mjs` with env:
-   - `REPO_URL` — full URL or `owner/name` form (the user-provided value)
-   - `DOMAIN` — full domain (used only for the optional CNAME / Pages enable; can be skipped if user didn't ask)
-   - `OPENAI_API_KEY` — read from local `.env` if present, otherwise prompt the user once via AskUserQuestion (header "OpenAI API key", free-text). The user's existing key for wp-design works fine.
-   - `SET_PAGES` — `"true"` only if user wants you to also enable Pages + CNAME. Default `"false"` (just push code, leave Pages config to user).
-
-The script:
-1. Captures the user's GitHub token from `git credential-manager` (Windows GCM, macOS keychain) or `gh auth token`.
-2. Verifies the repo exists (does NOT create it).
-3. Sets the `OPENAI_API_KEY` secret on the repo (sealed-box encrypted with libsodium).
-4. Initializes git in cwd if needed, sets the remote to the user-provided repo, commits everything, pushes the default branch.
-5. Optionally enables GitHub Pages from the `deploy` branch with the CNAME (only if `SET_PAGES=true`).
-
-If the repo doesn't exist, abort and tell the user to create it on github.com first, then re-run.
-
-## Step 5 — Final report
-
-Print:
-- ✅ Files reskinned (count)
-- ✅ Build green
-- ✅ Pushed to `<repo>` (if pushed)
-- ✅ `OPENAI_API_KEY` secret set (if pushed)
-- ⏳ User TODO: enable GitHub Pages manually (Settings → Pages → Source: deploy branch / `/`)
-- ⏳ User TODO: point DNS A records to GitHub Pages IPs (185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153)
-- ⏳ Next weekly auto-post: Monday 10:00 UTC (or run manually via Actions tab)
-
-## What NOT to do
-
-- **Do NOT create a new GitHub repo.** The user creates it themselves and pastes the URL.
-- **Do NOT enable Pages or auto-deploy unless explicitly asked.** Default behavior is push-only.
-- **Do NOT remove the WordPress emulation** in `app/layout.tsx` head, body classes, or in `public/wp-login.php` / `public/xmlrpc.php` / `public/wp-json/`.
-- Don't translate code identifiers, only user-facing strings.
-- Don't change the Tailwind theme or color tokens unless the user asks.
-- Don't push if `npm run build` failed — fix first.
-- Don't forget to remove the `.claude/skills/scaffold-site/` folder from the new project after successful scaffolding (it's only useful in the template). Ask the user before deleting.
+- Delete `.claude/skills/scaffold-site/` from the new repo before commit (the skill belongs in the template, not in scaffolded sites). Optional — the repo will still work either way.
+- The template repo's `e:\cod\wp-affiliate-template\` should be re-cloned for each new scaffold, OR the user works on a clean checkout each time.

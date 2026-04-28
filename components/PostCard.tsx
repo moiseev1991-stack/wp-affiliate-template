@@ -13,8 +13,8 @@ const THEMES: Record<string, {
   svg: React.ReactNode
 }> = {
   '🎰': {
-    label: 'Kasyna',
-    bg: ['#1a472a', '#2d6a4f'],
+    label: 'Sloty',
+    bg: ['#1a0d05', '#6a0723'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <rect x="20" y="15" width="80" height="70" rx="8" fill="white" fillOpacity=".12" stroke="white" strokeOpacity=".3" strokeWidth="1.5"/>
@@ -33,8 +33,8 @@ const THEMES: Record<string, {
     ),
   },
   '🪟': {
-    label: 'Minimalizm',
-    bg: ['#134e4a', '#0f766e'],
+    label: 'Live Casino',
+    bg: ['#1a0d05', '#8e1538'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <rect x="25" y="20" width="70" height="60" rx="2" fill="white" fillOpacity=".08" stroke="white" strokeOpacity=".4" strokeWidth="1.5"/>
@@ -51,8 +51,8 @@ const THEMES: Record<string, {
     ),
   },
   '🪵': {
-    label: 'Skandynawski',
-    bg: ['#1b4332', '#2d6a4f'],
+    label: 'Klasyka',
+    bg: ['#231410', '#5c2c0b'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <polygon points="60,12 85,45 75,45 90,68 70,68 70,88 50,88 50,68 30,68 45,45 35,45" fill="white" fillOpacity=".18" stroke="white" strokeOpacity=".4" strokeWidth="1.2"/>
@@ -68,8 +68,8 @@ const THEMES: Record<string, {
     ),
   },
   '🎨': {
-    label: 'Trendy',
-    bg: ['#312e81', '#4338ca'],
+    label: 'Strategie',
+    bg: ['#1c0d27', '#4a1968'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <circle cx="60" cy="50" r="32" fill="white" fillOpacity=".08" stroke="white" strokeOpacity=".2" strokeWidth="1"/>
@@ -88,8 +88,8 @@ const THEMES: Record<string, {
     ),
   },
   '🌿': {
-    label: 'Rośliny',
-    bg: ['#14532d', '#15803d'],
+    label: 'Promocje',
+    bg: ['#1a0d05', '#9c4a1a'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <line x1="60" y1="88" x2="60" y2="35" stroke="white" strokeOpacity=".5" strokeWidth="2" strokeLinecap="round"/>
@@ -104,8 +104,8 @@ const THEMES: Record<string, {
     ),
   },
   '💻': {
-    label: 'Home Office',
-    bg: ['#1e3a5f', '#1d4ed8'],
+    label: 'Mobile',
+    bg: ['#0f0a1a', '#3d1d56'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <rect x="22" y="22" width="76" height="50" rx="5" fill="white" fillOpacity=".1" stroke="white" strokeOpacity=".35" strokeWidth="1.5"/>
@@ -122,8 +122,8 @@ const THEMES: Record<string, {
     ),
   },
   '✨': {
-    label: 'Porady',
-    bg: ['#78350f', '#d97706'],
+    label: 'Bonusy',
+    bg: ['#3d2106', '#a3781d'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <circle cx="60" cy="42" r="22" fill="white" fillOpacity=".12" stroke="white" strokeOpacity=".3" strokeWidth="1.5"/>
@@ -143,8 +143,8 @@ const THEMES: Record<string, {
     ),
   },
   '🍳': {
-    label: 'Kuchnia',
-    bg: ['#7c2d12', '#c2410c'],
+    label: 'Recenzje',
+    bg: ['#231410', '#7c2d12'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <ellipse cx="55" cy="58" rx="28" ry="22" fill="white" fillOpacity=".1" stroke="white" strokeOpacity=".3" strokeWidth="1.5"/>
@@ -163,8 +163,8 @@ const THEMES: Record<string, {
     ),
   },
   '💡': {
-    label: 'Oświetlenie',
-    bg: ['#365314', '#4d7c0f'],
+    label: 'Porady',
+    bg: ['#3d2106', '#8e6911'],
     svg: (
       <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
         <line x1="60" y1="10" x2="60" y2="22" stroke="white" strokeOpacity=".4" strokeWidth="2" strokeLinecap="round"/>
@@ -186,8 +186,8 @@ const THEMES: Record<string, {
 }
 
 const DEFAULT_THEME = {
-  label: 'Design',
-  bg: ['#1e3a5f', '#2563eb'] as [string, string],
+  label: 'Casino',
+  bg: ['#1a0d05', '#6a0723'] as [string, string],
   svg: (
     <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-36 h-28">
       <rect x="25" y="20" width="70" height="60" rx="6" fill="white" fillOpacity=".1" stroke="white" strokeOpacity=".3" strokeWidth="1.5"/>
@@ -208,6 +208,67 @@ function slugHash(slug: string): number {
   return h
 }
 
+// Per-slug variation seed: keeps the category SVG, but tweaks accent fills,
+// rotation and floating decorations so two posts in the same category never
+// look identical.
+const ACCENT_PALETTE = ['#ffd166', '#f5d36c', '#4ecdc4', '#ff6b6b', '#c2185b', '#a78bfa', '#fbbf24', '#fb7185', '#34d399']
+
+interface Variation {
+  rotate: number
+  scale: number
+  accent: string
+  shapes: Array<{ kind: 'dot' | 'ring' | 'sparkle' | 'bar'; x: number; y: number; r: number; fill: string; opacity: number }>
+}
+
+function variationFor(slug: string): Variation {
+  const h = slugHash(slug)
+  const accent = ACCENT_PALETTE[h % ACCENT_PALETTE.length]
+  const rotate = ((h >> 3) % 11) - 5
+  const scale = 0.92 + ((h >> 7) % 16) / 100
+  const shapeCount = 3 + ((h >> 5) % 3)
+  const shapes: Variation['shapes'] = []
+  for (let i = 0; i < shapeCount; i++) {
+    const seed = (h >> (i * 4)) ^ (i * 2654435761)
+    const kind = (['dot', 'ring', 'sparkle', 'bar'] as const)[seed % 4]
+    shapes.push({
+      kind,
+      x: 8 + (seed % 100),
+      y: 6 + ((seed >> 7) % 80),
+      r: 2 + ((seed >> 3) % 5),
+      fill: ACCENT_PALETTE[(seed >> 11) % ACCENT_PALETTE.length],
+      opacity: 0.18 + ((seed >> 13) % 35) / 100,
+    })
+  }
+  return { rotate, scale, accent, shapes }
+}
+
+function VariationLayer({ v, slug }: { v: Variation; slug: string }) {
+  return (
+    <svg
+      viewBox="0 0 120 100"
+      preserveAspectRatio="none"
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {v.shapes.map((s, i) => {
+        if (s.kind === 'dot')
+          return <circle key={`${slug}-${i}`} cx={s.x} cy={s.y} r={s.r} fill={s.fill} opacity={s.opacity} />
+        if (s.kind === 'ring')
+          return <circle key={`${slug}-${i}`} cx={s.x} cy={s.y} r={s.r + 2} fill="none" stroke={s.fill} strokeWidth="0.8" opacity={s.opacity} />
+        if (s.kind === 'bar')
+          return <rect key={`${slug}-${i}`} x={s.x} y={s.y} width={s.r * 3} height="1.4" rx="0.7" fill={s.fill} opacity={s.opacity} />
+        return (
+          <g key={`${slug}-${i}`} opacity={s.opacity}>
+            <line x1={s.x - s.r} y1={s.y} x2={s.x + s.r} y2={s.y} stroke={s.fill} strokeWidth="0.8" strokeLinecap="round" />
+            <line x1={s.x} y1={s.y - s.r} x2={s.x} y2={s.y + s.r} stroke={s.fill} strokeWidth="0.8" strokeLinecap="round" />
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
@@ -220,13 +281,15 @@ export default function PostCard({ post, size = 'normal', customExcerpt }: Props
   const theme = THEMES[post.emoji] ?? DEFAULT_THEME
   const [c1, c2] = theme.bg
   const mins = readingTime(post.content)
+  const v = variationFor(post.slug)
+  const excerpt = customExcerpt ?? post.description
 
   return (
     <article className={`card-lift hentry type-post status-publish format-standard bg-[var(--bg-card)] rounded-2xl overflow-hidden border border-[var(--border)] flex flex-col group`} style={{ boxShadow: 'var(--shadow)' }}>
       <div
         className="relative overflow-hidden flex items-center justify-center"
         style={{
-          background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
+          background: `linear-gradient(${135 + v.rotate * 4}deg, ${c1} 0%, ${c2} 100%)`,
           height: size === 'large' ? 220 : 180,
         }}
       >
@@ -241,13 +304,28 @@ export default function PostCard({ post, size = 'normal', customExcerpt }: Props
           </defs>
           <rect width="100%" height="100%" fill={`url(#p-${post.slug})`} />
         </svg>
-        <div className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full border-2 border-white/10" />
 
-        <div className="relative group-hover:scale-105 transition-transform duration-300 drop-shadow-lg">
+        <VariationLayer v={v} slug={post.slug} />
+
+        <div
+          className="absolute w-32 h-32 rounded-full border-2 border-white/10"
+          style={{
+            bottom: -32 + (slugHash(post.slug) % 24),
+            right: -32 + ((slugHash(post.slug) >> 4) % 24),
+          }}
+        />
+
+        <div
+          className="relative group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+          style={{ transform: `rotate(${v.rotate}deg) scale(${v.scale})` }}
+        >
           {theme.svg}
         </div>
 
-        <span className="absolute top-3 left-3 bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-white/30">
+        <span
+          className="absolute top-3 left-3 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border"
+          style={{ background: 'rgba(0,0,0,0.35)', borderColor: `${v.accent}66` }}
+        >
           {theme.label}
         </span>
       </div>
@@ -260,15 +338,15 @@ export default function PostCard({ post, size = 'normal', customExcerpt }: Props
         </div>
 
         <h3 className="entry-title font-heading text-lg font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors mb-2 leading-snug line-clamp-2">
-          <Link href={`/blog/${post.slug}/`}>{post.title}</Link>
+          <Link href={`/${post.slug}/`}>{post.title}</Link>
         </h3>
 
-        <p className="text-sm text-[var(--text-muted)] leading-relaxed line-clamp-2 flex-1 mb-4 wp-block-paragraph">
-          {customExcerpt ?? post.description}
+        <p className="text-sm text-[var(--text-muted)] leading-relaxed line-clamp-3 flex-1 mb-4 wp-block-paragraph">
+          {excerpt}
         </p>
 
         <Link
-          href={`/blog/${post.slug}/`}
+          href={`/${post.slug}/`}
           className="self-start inline-flex items-center gap-1.5 text-sm text-[var(--accent)] font-semibold hover:gap-3 transition-all"
         >
           Czytaj więcej <span className="text-base">→</span>

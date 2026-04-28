@@ -1,0 +1,24 @@
+{
+  "_comment": "Replaced wholesale by the scaffold-site skill. Used by scripts/generate-post.mjs to know language, niche, and money-page details when generating monthly articles.",
+  "language": "en",
+  "languageName": "English",
+  "niche": "general affiliate",
+  "siteName": "WP Affiliate",
+  "moneyPageUrl": "https://example.com",
+  "moneyPageAnchor": "Brand",
+  "moneyPageBonus": "welcome bonus",
+  "moneyBlockHeading": "Editor's pick",
+  "moneyBlockBrief": "Mention key product features, why it stands out, and what users get.",
+  "responsibleDisclaimer": "*A short responsible-use disclaimer appropriate to the niche.*",
+  "topicCategories": [
+    "in-depth product reviews",
+    "buyer's guides and comparisons",
+    "how-to tutorials and walkthroughs",
+    "industry news and updates",
+    "user FAQs and troubleshooting",
+    "best-of lists and rankings"
+  ],
+  "allowedEmojis": ["🎰", "🪟", "🪵", "🎨", "🌿", "💻", "✨", "🍳", "💡"],
+  "emojiGuide": "Map each emoji to a category from lib/categories.ts (🎰=top picks, 🪟=live, 🪵=classics, 🎨=strategies, 🌿=promos, 💻=mobile, ✨=bonuses, 🍳=reviews, 💡=guides).",
+  "fallbackPalette": ["#1e293b", "#334155", "#94a3b8"]
+}

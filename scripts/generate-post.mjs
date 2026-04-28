@@ -1,4 +1,18 @@
 #!/usr/bin/env node
+// Monthly auto-post generator. Driven by scripts/generation.config.json
+// (written at scaffold-time by the scaffold-site skill) so this script never
+// has to be edited per-site.
+//
+// Inputs (env):
+//   OPENAI_API_KEY  required
+//   OPENAI_MODEL    default: gpt-4o-mini
+//   COUNT           default: 1 (number of articles to generate in this run)
+//   BACKDATE=1      optional: backdate posts up to 6 months for batch backfills
+//
+// Outputs:
+//   content/posts/<slug>.mdx
+//   public/illustrations/<slug>.svg
+
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -12,25 +26,30 @@ if (!OPENAI_API_KEY) {
 const ROOT = process.cwd()
 const POSTS_DIR = path.join(ROOT, 'content', 'posts')
 const ILLUSTRATIONS_DIR = path.join(ROOT, 'public', 'illustrations')
+const CONFIG_PATH = path.join(ROOT, 'scripts', 'generation.config.json')
 
-const MONEY_PAGE_URL = 'https://vulkankasyno.pl'
-const MONEY_PAGE_ANCHOR = 'Vulkan Vegas'
-const MONEY_PAGE_BONUS = 'bonus powitalny do 4000 PLN'
+if (!fs.existsSync(CONFIG_PATH)) {
+  console.error(`generation.config.json not found at ${CONFIG_PATH}.`)
+  console.error(`Run the scaffold-site skill first to write this config.`)
+  process.exit(1)
+}
+const CONFIG = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
 
-const ALLOWED_EMOJIS = ['🎰', '🪟', '🪵', '🎨', '🌿', '💻', '✨', '🍳', '💡']
-
-const TOPIC_CATEGORIES = [
-  'aranżacja wnętrz i style (skandynawski, minimalizm, boho, loft, japandi)',
-  'kolory roku i palety w aranżacji',
-  'meble i materiały (drewno, tkaniny, dodatki)',
-  'oświetlenie i nastrój wnętrza',
-  'rośliny doniczkowe i zieleń w domu',
-  'home office i ergonomia',
-  'kuchnia, jadalnia, łazienka — projekty i porady',
-  'DIY, dekoracje, sezonowe inspiracje',
-  'porady dla małych mieszkań i kawalerek',
-  'kasyna online dla polskich graczy (rzadko, max 1 na 5 artykułów)',
-]
+const {
+  language,
+  languageName,
+  niche,
+  moneyPageUrl,
+  moneyPageAnchor,
+  moneyPageBonus,
+  topicCategories,
+  allowedEmojis,
+  emojiGuide,
+  siteName,
+  moneyBlockHeading,
+  moneyBlockBrief,
+  responsibleDisclaimer,
+} = CONFIG
 
 if (!fs.existsSync(ILLUSTRATIONS_DIR)) fs.mkdirSync(ILLUSTRATIONS_DIR, { recursive: true })
 if (!fs.existsSync(POSTS_DIR)) fs.mkdirSync(POSTS_DIR, { recursive: true })
@@ -57,7 +76,7 @@ async function callOpenAI({ messages, jsonMode = false, maxTokens = 6000 }) {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages,
       max_tokens: maxTokens,
       ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
@@ -76,11 +95,11 @@ async function pickTopic({ existingSlugs, existingTitles }) {
     {
       role: 'system',
       content:
-        'You are a content strategist for a Polish interior design and lifestyle blog (wp-design.org). The blog also occasionally covers online casinos for Polish players. You always respond with strict JSON.',
+        `You are a content strategist for ${siteName} — a ${languageName}-language affiliate blog covering ${niche}. You always respond with strict JSON.`,
     },
     {
       role: 'user',
-      content: `Pick a fresh topic for a new SEO-optimized blog post in Polish. The post must NOT duplicate any of the existing posts.
+      content: `Pick a fresh topic for a new SEO-optimized blog post in ${languageName}. The post must NOT duplicate any of the existing posts.
 
 Existing slugs:
 ${existingSlugs.map(s => `- ${s}`).join('\n')}
@@ -89,26 +108,18 @@ Existing titles:
 ${existingTitles.map(t => `- ${t}`).join('\n')}
 
 Good topic categories:
-${TOPIC_CATEGORIES.map(c => `- ${c}`).join('\n')}
+${topicCategories.map(c => `- ${c}`).join('\n')}
 
-Pick ONE allowed emoji from this list that best fits the topic: ${ALLOWED_EMOJIS.join(' ')}.
+Pick ONE allowed emoji from this list that best fits the topic: ${allowedEmojis.join(' ')}.
 Emoji guide:
-- 🎰 = casino/gambling
-- 🪟 = minimalism
-- 🪵 = scandinavian
-- 🎨 = trends/colors
-- 🌿 = plants/greenery
-- 💻 = home office
-- ✨ = general tips
-- 🍳 = kitchen
-- 💡 = lighting
+${emojiGuide}
 
 Return strict JSON:
 {
-  "slug": "lowercase-kebab-case-without-polish-diacritics-max-50-chars",
-  "title": "Polish title, attention-grabbing, max 70 chars, Title Case, with em dash if useful",
-  "description": "SEO meta description in Polish, max 155 chars, must mention concrete value",
-  "emoji": "one of: ${ALLOWED_EMOJIS.join(' ')}"
+  "slug": "lowercase-kebab-case-without-diacritics-max-50-chars",
+  "title": "${languageName} title, attention-grabbing, max 70 chars, Title Case, with em dash if useful",
+  "description": "SEO meta description in ${languageName}, max 155 chars, must mention concrete value (numbers, brand, percentages, etc.)",
+  "emoji": "one of: ${allowedEmojis.join(' ')}"
 }`,
     },
   ]
@@ -120,8 +131,8 @@ Return strict JSON:
   if (existingSlugs.includes(parsed.slug)) {
     throw new Error(`Topic duplicates existing slug: ${parsed.slug}`)
   }
-  if (!ALLOWED_EMOJIS.includes(parsed.emoji)) {
-    parsed.emoji = '✨'
+  if (!allowedEmojis.includes(parsed.emoji)) {
+    parsed.emoji = allowedEmojis[0]
   }
   return parsed
 }
@@ -135,18 +146,18 @@ async function generateSvg({ slug, title, emoji }) {
     },
     {
       role: 'user',
-      content: `Generate a clean, modern decorative SVG illustration (320x180 viewBox) for a Polish blog post.
+      content: `Generate a clean, modern decorative SVG illustration (320x180 viewBox) for a ${languageName} blog post in the ${niche} niche.
 
 Topic: "${title}"
 Emoji theme: ${emoji}
 
 Style requirements:
 - viewBox="0 0 320 180", width="320" height="180"
-- dark gradient background fitting the theme (no white background)
+- dark gradient background fitting the niche aesthetic
 - a centered circular badge / focal element
 - subtle decorative accents (stars, dots, lines) in corners
 - a thin bottom strip / label area
-- use semi-transparent whites and one accent color
+- semi-transparent whites and one accent color
 - no text, no emoji, no raster images, no external fonts
 - clean, minimal, suitable as a thumbnail
 - self-contained, valid SVG
@@ -175,18 +186,8 @@ Return ONLY the SVG markup starting with <svg ...> and ending with </svg>.`,
 }
 
 function buildFallbackSvg({ slug, emoji }) {
-  const palette = {
-    '🎰': ['#1b4332', '#2d6a4f', '#ffd166'],
-    '🪟': ['#134e4a', '#0f766e', '#5eead4'],
-    '🪵': ['#1b4332', '#2d6a4f', '#d4a373'],
-    '🎨': ['#312e81', '#4338ca', '#fbbf24'],
-    '🌿': ['#14532d', '#15803d', '#86efac'],
-    '💻': ['#1e3a5f', '#1d4ed8', '#60a5fa'],
-    '✨': ['#78350f', '#d97706', '#fde68a'],
-    '🍳': ['#7c2d12', '#c2410c', '#fdba74'],
-    '💡': ['#365314', '#4d7c0f', '#fef08a'],
-  }
-  const [c1, c2, accent] = palette[emoji] ?? ['#1e293b', '#334155', '#94a3b8']
+  const palette = CONFIG.fallbackPalette ?? ['#1e293b', '#334155', '#94a3b8']
+  const [c1, c2, accent] = palette
   let hash = 0
   for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0
   const cx = 160
@@ -206,12 +207,6 @@ function buildFallbackSvg({ slug, emoji }) {
   <circle cx="${cx}" cy="${cy}" r="44" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.25" stroke-width="1.5"/>
   <circle cx="${cx}" cy="${cy}" r="28" fill="${accent}" fill-opacity="0.55"/>
   <circle cx="${cx}" cy="${cy}" r="14" fill="white" fill-opacity="0.7"/>
-  <g stroke="white" stroke-opacity="0.4" stroke-linecap="round" stroke-width="1.5">
-    <line x1="24" y1="24" x2="32" y2="24"/><line x1="28" y1="20" x2="28" y2="28"/>
-    <line x1="296" y1="24" x2="304" y2="24"/><line x1="300" y1="20" x2="300" y2="28"/>
-    <line x1="24" y1="156" x2="32" y2="156"/><line x1="28" y1="152" x2="28" y2="160"/>
-    <line x1="296" y1="156" x2="304" y2="156"/><line x1="300" y1="152" x2="300" y2="160"/>
-  </g>
   <rect x="0" y="160" width="320" height="20" fill="black" fill-opacity="0.25"/>
   <rect x="120" y="167" width="80" height="6" rx="3" fill="${accent}" fill-opacity="0.7"/>
 </svg>`
@@ -222,25 +217,25 @@ async function generateOutline({ title, description }) {
     {
       role: 'system',
       content:
-        'You are a senior content editor writing in Polish for an interior design and lifestyle blog. You always respond with strict JSON.',
+        `You are a senior content editor writing in ${languageName} for a ${niche} blog. You always respond with strict JSON.`,
     },
     {
       role: 'user',
-      content: `Plan a 1600+ word SEO blog post in Polish.
+      content: `Plan a 1600+ word SEO blog post in ${languageName}.
 
 Title: "${title}"
 Description: "${description}"
 
 Return strict JSON:
 {
-  "intro_points": ["3 concrete points to cover in the intro, in Polish"],
+  "intro_points": ["3 concrete points to cover in the intro, in ${languageName} — hook + value proposition + what reader will learn"],
   "sections": [
-    { "title": "## 1. Section title in Polish", "key_points": ["point1", "point2", "point3", "point4"] },
+    { "title": "## 1. Section title in ${languageName}", "key_points": ["point1", "point2", "point3", "point4"] },
     ... exactly 8 sections numbered 1 to 8
   ]
 }
 
-Make sections specific, practical, non-overlapping. Use Polish.`,
+Make sections specific, practical, non-overlapping. Cover concrete details and numbers. Use ${languageName}.`,
     },
   ]
   const raw = await callOpenAI({ messages, jsonMode: true, maxTokens: 2000 })
@@ -251,21 +246,18 @@ Make sections specific, practical, non-overlapping. Use Polish.`,
   return parsed
 }
 
-async function generateBody({ title, description, outline, emoji }) {
-  const isCasino = emoji === '🎰'
-  const moneyBlock = isCasino
-    ? `After the 8 sections, add a section "## Polecane kasyno" (2 paragraphs) that naturally recommends [${MONEY_PAGE_ANCHOR}](${MONEY_PAGE_URL}) — mention ${MONEY_PAGE_BONUS}, MGA license, fast payouts.`
-    : `After the 8 sections, add a short closing section "## Podsumowanie" (1-2 paragraphs) summarizing key takeaways.`
+async function generateBody({ title, description, outline }) {
+  const moneyBlock = `After the 8 sections, add a section "## ${moneyBlockHeading}" (2-3 paragraphs) that naturally recommends [${moneyPageAnchor}](${moneyPageUrl}). ${moneyBlockBrief} Frame it as the editor's pick relevant to the article topic, not a hard sell.`
 
   const messages = [
     {
       role: 'system',
       content:
-        'You write long-form SEO articles in fluent, natural Polish for a Polish interior design and lifestyle blog. No fluff, no filler. Concrete, practical, useful.',
+        `You write long-form SEO articles in fluent, natural ${languageName} for a ${niche} affiliate blog. No fluff, no filler. Concrete, practical, useful.`,
     },
     {
       role: 'user',
-      content: `Write the full article body in Polish based on this outline.
+      content: `Write the full article body in ${languageName} based on this outline.
 
 Title: "${title}"
 Description: "${description}"
@@ -273,19 +265,19 @@ Description: "${description}"
 Intro must cover:
 ${outline.intro_points.map(p => `- ${p}`).join('\n')}
 
-Sections (write each section as ## heading + 200+ words of dense, useful Polish prose, with **bold** key terms):
+Sections (write each section as ## heading + 200+ words of dense, useful ${languageName} prose, with **bold** key terms and concrete numbers):
 ${outline.sections.map(s => `${s.title}\n  Key points: ${s.key_points.join('; ')}`).join('\n\n')}
 
 ${moneyBlock}
 
-End with a single italic disclaimer line in Polish appropriate to the topic (e.g. about responsible decoration choices, or for casino topics: about responsible gambling and 18+).
+End with a single italic disclaimer line in ${languageName}: ${responsibleDisclaimer}
 
 Constraints:
 - Total length: at least 1600 words.
 - Use markdown headings (##), bold (**term**), and occasional bullet lists.
 - No H1, no frontmatter, no images, no code blocks.
 - Do NOT include the article title as a heading — start directly with the intro paragraphs.
-- Polish only.
+- ${languageName} only.
 
 Return only the markdown body.`,
     },
@@ -294,8 +286,17 @@ Return only the markdown body.`,
   return body.trim()
 }
 
+function getPostDate() {
+  if (process.env.BACKDATE === '1') {
+    const sixMonthsMs = 180 * 24 * 60 * 60 * 1000
+    const offset = Math.floor(Math.random() * sixMonthsMs)
+    return new Date(Date.now() - offset).toISOString().slice(0, 10)
+  }
+  return new Date().toISOString().slice(0, 10)
+}
+
 function buildMdx({ title, slug, description, emoji, image, body }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = getPostDate()
   const fm = [
     '---',
     `title: "${title.replace(/"/g, '\\"')}"`,
@@ -330,12 +331,7 @@ async function main() {
   const outline = await generateOutline({ title: topic.title, description: topic.description })
 
   console.log('→ Generating body')
-  const body = await generateBody({
-    title: topic.title,
-    description: topic.description,
-    outline,
-    emoji: topic.emoji,
-  })
+  const body = await generateBody({ title: topic.title, description: topic.description, outline })
   const wordCount = body.split(/\s+/).filter(Boolean).length
   console.log(`  ${wordCount} words`)
 
@@ -345,7 +341,27 @@ async function main() {
   console.log(`✓ Wrote ${outFile}`)
 }
 
-main().catch(err => {
-  console.error('FAILED:', err)
+const COUNT = Math.max(1, parseInt(process.env.COUNT || '1', 10))
+
+async function runBatch() {
+  let ok = 0, fail = 0
+  for (let i = 1; i <= COUNT; i++) {
+    console.log(`\n========== Article ${i}/${COUNT} ==========`)
+    try {
+      await main()
+      ok++
+    } catch (err) {
+      fail++
+      console.error(`FAILED article ${i}:`, err.message || err)
+    }
+    if (i < COUNT) await new Promise(r => setTimeout(r, 1500))
+  }
+  console.log(`\n==========================================`)
+  console.log(`Batch done: ${ok} ok, ${fail} failed (of ${COUNT})`)
+  if (fail > 0 && ok === 0) process.exit(1)
+}
+
+runBatch().catch(err => {
+  console.error('BATCH FAILED:', err)
   process.exit(1)
 })
