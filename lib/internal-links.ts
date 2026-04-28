@@ -71,20 +71,29 @@ export function processArticleBody(content: string, currentSlug: string, all: Po
   return out
 }
 
-// Place exactly ONE money-page link in the body, and that link MUST live in
-// the first paragraph (above the fold). All other brand mentions stay as
-// plain text. Behavior:
-//  1. Body already has a link to the money URL anywhere → leave as-is.
-//  2. First paragraph mentions the brand → link the first such occurrence.
-//  3. First paragraph has no mention but body does → append a localized
-//     "see our review of [Brand](url)" sentence to the first paragraph.
-//  4. Body has no mention at all → return as-is, no link added.
+// Hard rule: AT MOST ONE outbound money link per article body, and that link
+// MUST live in the first paragraph (above the fold). Algorithm:
+//  1. Strip every existing markdown link to siteConfig.moneyPageUrl — turn
+//     each back into plain or bold brand text. Generation may have placed
+//     extra links in editor's-pick sections; we wipe them so the only
+//     remaining link is the one we add to the first paragraph.
+//  2. Find first paragraph (first non-empty, non-heading line block).
+//  3. Inside that paragraph, link the first **Brand** (bold) mention, or
+//     fall back to the first plain mention.
+//  4. If the first paragraph has no mention but body does, append a localized
+//     lead-out sentence with the link.
+//  5. If body has no brand mention at all, leave content untouched.
 function linkifyMoneyInFirstParagraph(content: string): string {
   const url = siteConfig.moneyPageUrl
   const anchor = siteConfig.moneyPageAnchor
   if (!anchor) return content
 
-  if (content.includes(`(${url})`)) return content
+  // Strip every existing money-URL link first.
+  const escUrl = escapeReg(url)
+  let stripped = content
+    .replace(new RegExp(`\\[\\*\\*([^\\]]*)\\*\\*\\]\\(${escUrl}\\)`, 'g'), '**$1**')
+    .replace(new RegExp(`\\[([^\\]]*)\\]\\(${escUrl}\\)`, 'g'), '$1')
+  content = stripped
 
   const anchorRe = new RegExp(escapeReg(anchor))
   if (!anchorRe.test(content)) return content
