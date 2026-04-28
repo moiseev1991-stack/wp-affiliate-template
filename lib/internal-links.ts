@@ -1,6 +1,6 @@
 import type { Post } from '@/lib/posts'
 import { siteConfig } from '@/lib/config'
-import { isMoneyArticleSlug } from '@/lib/money'
+import { isMoneyArticleSlug, featuredHomeSlugs } from '@/lib/money'
 
 const FALLBACK_LEAD: Record<string, (anchor: string, url: string) => string> = {
   pl: (a, u) => ` Sprawdź pełną recenzję na [${a}](${u}).`,
@@ -58,7 +58,11 @@ export function pickInternalTargets(currentSlug: string, all: Post[], count = 5)
 export function processArticleBody(content: string, currentSlug: string, all: Post[]): string {
   let out = content
 
-  out = linkifyMoneyInFirstParagraph(out)
+  // Money links live ONLY on the 3 home-featured posts (one per page,
+  // first paragraph). Every other article: strip all money links and
+  // strip the bold formatting on the brand so it reads as plain text.
+  const isFeaturedMoney = (featuredHomeSlugs() as readonly string[]).includes(currentSlug)
+  out = enforceMoneyLinkPolicy(out, isFeaturedMoney)
 
   // Inject 5 internal links — find keyword matches from target titles in the body
   // and replace the first occurrence with a markdown link. Skip text already
@@ -71,34 +75,37 @@ export function processArticleBody(content: string, currentSlug: string, all: Po
   return out
 }
 
-// Hard rule: AT MOST ONE outbound money link per article body, and that link
-// MUST live in the first paragraph (above the fold). Algorithm:
-//  1. Strip every existing markdown link to siteConfig.moneyPageUrl — turn
-//     each back into plain or bold brand text. Generation may have placed
-//     extra links in editor's-pick sections; we wipe them so the only
-//     remaining link is the one we add to the first paragraph.
-//  2. Find first paragraph (first non-empty, non-heading line block).
-//  3. Inside that paragraph, link the first **Brand** (bold) mention, or
-//     fall back to the first plain mention.
-//  4. If the first paragraph has no mention but body does, append a localized
-//     lead-out sentence with the link.
-//  5. If body has no brand mention at all, leave content untouched.
-function linkifyMoneyInFirstParagraph(content: string): string {
+// Money-link policy:
+//  - On a featured money post (1 of the 3 home-featured slugs): place exactly
+//    one link to the money page in the first paragraph (above the fold). Strip
+//    bold formatting on every other brand mention in the body.
+//  - On any other article: strip every existing money link AND strip the bold
+//    formatting on plain brand mentions. The brand reads as plain prose, never
+//    bold-without-link.
+function enforceMoneyLinkPolicy(content: string, isFeaturedMoney: boolean): string {
   const url = siteConfig.moneyPageUrl
   const anchor = siteConfig.moneyPageAnchor
   if (!anchor) return content
 
-  // Strip every existing money-URL link first.
   const escUrl = escapeReg(url)
-  let stripped = content
+  const escAnchor = escapeReg(anchor)
+
+  // Always remove every existing markdown link to the money URL.
+  let out = content
     .replace(new RegExp(`\\[\\*\\*([^\\]]*)\\*\\*\\]\\(${escUrl}\\)`, 'g'), '**$1**')
     .replace(new RegExp(`\\[([^\\]]*)\\]\\(${escUrl}\\)`, 'g'), '$1')
-  content = stripped
 
-  const anchorRe = new RegExp(escapeReg(anchor))
-  if (!anchorRe.test(content)) return content
+  if (!isFeaturedMoney) {
+    // Strip bold on every brand mention so it reads as plain prose.
+    out = out.replace(new RegExp(`\\*\\*${escAnchor}\\*\\*`, 'g'), anchor)
+    return out
+  }
 
-  const lines = content.split('\n')
+  // Featured money post: place exactly one link in the first paragraph.
+  const anchorRe = new RegExp(escAnchor)
+  if (!anchorRe.test(out)) return out
+
+  const lines = out.split('\n')
   let firstParaIdx = -1
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i].trim()
@@ -107,11 +114,11 @@ function linkifyMoneyInFirstParagraph(content: string): string {
     firstParaIdx = i
     break
   }
-  if (firstParaIdx < 0) return content
+  if (firstParaIdx < 0) return out
 
   let para = lines[firstParaIdx]
-  const boldRe = new RegExp(`\\*\\*${escapeReg(anchor)}\\*\\*`)
-  const plainRe = new RegExp(`(^|[^\\[\\*\\w])${escapeReg(anchor)}(?![\\w\\]\\*])`)
+  const boldRe = new RegExp(`\\*\\*${escAnchor}\\*\\*`)
+  const plainRe = new RegExp(`(^|[^\\[\\*\\w])${escAnchor}(?![\\w\\]\\*])`)
 
   if (boldRe.test(para)) {
     para = para.replace(boldRe, `[**${anchor}**](${url})`)
@@ -123,7 +130,10 @@ function linkifyMoneyInFirstParagraph(content: string): string {
     para = para.replace(/\s*$/, '') + lead
   }
   lines[firstParaIdx] = para
-  return lines.join('\n')
+
+  // Strip bold from any remaining standalone brand mentions in the body so the
+  // page has exactly one styled mention — the link in the first paragraph.
+  return lines.join('\n').replace(new RegExp(`\\*\\*${escAnchor}\\*\\*`, 'g'), anchor)
 }
 
 function injectKeywordLinkOnce(content: string, target: { slug: string; title: string }): string {
