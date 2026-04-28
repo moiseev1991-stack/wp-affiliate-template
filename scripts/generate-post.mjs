@@ -91,6 +91,15 @@ async function callOpenAI({ messages, jsonMode = false, maxTokens = 6000 }) {
 }
 
 async function pickTopic({ existingSlugs, existingTitles }) {
+  // Hard-pinned topic: scaffold.mjs uses this to force the 5 money-article titles
+  // and the orchestrator passes them in via FORCE_TOPIC env (JSON-encoded).
+  if (process.env.FORCE_TOPIC) {
+    const forced = JSON.parse(process.env.FORCE_TOPIC)
+    if (!forced.slug || !forced.title || !forced.description || !forced.emoji) {
+      throw new Error('FORCE_TOPIC must include slug, title, description, emoji')
+    }
+    return forced
+  }
   const messages = [
     {
       role: 'system',
@@ -247,7 +256,11 @@ Make sections specific, practical, non-overlapping. Cover concrete details and n
 }
 
 async function generateBody({ title, description, outline }) {
+  const isMoney = process.env.MONEY_ARTICLE === '1'
   const moneyBlock = `After the 8 sections, add a section "## ${moneyBlockHeading}" (2-3 paragraphs) that naturally recommends [${moneyPageAnchor}](${moneyPageUrl}). ${moneyBlockBrief} Frame it as the editor's pick relevant to the article topic, not a hard sell.`
+  const moneyLeadInstruction = isMoney
+    ? `\n\nIMPORTANT: This is a money-focused article about ${moneyPageAnchor}. The FIRST paragraph of the intro must mention [${moneyPageAnchor}](${moneyPageUrl}) as a clickable markdown link. Refer to ${moneyPageAnchor} naturally throughout the article (5-8 mentions total). Mention the bonus phrase "${moneyPageBonus}" verbatim at least once in the body.`
+    : ''
 
   const messages = [
     {
@@ -268,7 +281,7 @@ ${outline.intro_points.map(p => `- ${p}`).join('\n')}
 Sections (write each section as ## heading + 200+ words of dense, useful ${languageName} prose, with **bold** key terms and concrete numbers):
 ${outline.sections.map(s => `${s.title}\n  Key points: ${s.key_points.join('; ')}`).join('\n\n')}
 
-${moneyBlock}
+${moneyBlock}${moneyLeadInstruction}
 
 End with a single italic disclaimer line in ${languageName}: ${responsibleDisclaimer}
 
@@ -297,6 +310,7 @@ function getPostDate() {
 
 function buildMdx({ title, slug, description, emoji, image, body }) {
   const today = getPostDate()
+  const featured = process.env.MONEY_ARTICLE === '1' ? 'true' : 'false'
   const fm = [
     '---',
     `title: "${title.replace(/"/g, '\\"')}"`,
@@ -304,7 +318,7 @@ function buildMdx({ title, slug, description, emoji, image, body }) {
     `date: "${today}"`,
     `description: "${description.replace(/"/g, '\\"')}"`,
     `emoji: "${emoji}"`,
-    `featured: false`,
+    `featured: ${featured}`,
     `image: "${image}"`,
     '---',
     '',

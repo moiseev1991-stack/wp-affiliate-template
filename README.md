@@ -94,16 +94,33 @@ npm run dev          # http://localhost:3000
 npm run build        # static export to out/
 ```
 
-## Manual usage (without Claude Code)
+## Autonomous usage (recommended — works on remote servers, no human in the loop)
 
 ```bash
-# 1. Theme
-node scripts/randomize-theme.mjs --niche casino --seed example.pl
+git clone https://github.com/moiseev1991-stack/wp-affiliate-template my-new-site
+cd my-new-site
 
-# 2. Edit lib/config.ts with siteConfig values
-# 3. Edit scripts/generation.config.json with niche/language/topics
-# 4. Drop your 50 .mdx files into content/posts/
-# 5. Build + deploy
+cp scaffold.config.example.json scaffold.config.json
+# Edit scaffold.config.json: domain, language, niche, money URL/anchor/bonus, donor URL, target repo, page count.
+
+export OPENAI_API_KEY=sk-...
+export GITHUB_TOKEN=ghp_...
+export CLOUDFLARE_API_TOKEN=...     # optional, enables auto-deploy
+export CLOUDFLARE_ACCOUNT_ID=...    # paired with the token
+
+node scripts/scaffold.mjs
+```
+
+The orchestrator is **fully non-interactive**. It either succeeds end-to-end (donor probe → theme → config → 50 articles → build → push → secrets → Cloudflare deploy) or fails fast with a clear error. It never prompts.
+
+You can also alternatively run it via Claude Code (`claude /scaffold-site`) — same orchestrator, just wrapped in a skill that aborts with a message if config/env are missing rather than asking you for values.
+
+## Manual usage (advanced — you build everything yourself)
+
+```bash
+node scripts/randomize-theme.mjs --niche casino --seed example.pl
+# edit lib/config.ts, scripts/generation.config.json
+# drop your .mdx files into content/posts/
 npm run build
 wrangler deploy
 ```
