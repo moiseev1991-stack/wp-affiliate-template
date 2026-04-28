@@ -2,6 +2,14 @@ import type { Post } from '@/lib/posts'
 import { siteConfig } from '@/lib/config'
 import { isMoneyArticleSlug } from '@/lib/money'
 
+const FALLBACK_LEAD: Record<string, (anchor: string, url: string) => string> = {
+  pl: (a, u) => ` Sprawdź pełną recenzję na [${a}](${u}).`,
+  en: (a, u) => ` See our full guide on [${a}](${u}).`,
+  de: (a, u) => ` Mehr in unserem [${a}](${u})-Test.`,
+  cs: (a, u) => ` Více v naší recenzi [${a}](${u}).`,
+  sk: (a, u) => ` Viac v našej recenzii [${a}](${u}).`,
+}
+
 function slugHash(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
@@ -50,12 +58,7 @@ export function pickInternalTargets(currentSlug: string, all: Post[], count = 5)
 export function processArticleBody(content: string, currentSlug: string, all: Post[]): string {
   let out = content
 
-  out = linkifyMoneyAnchor(out)
-
-  // For money articles, force the link to appear in the first paragraph.
-  if (isMoneyArticleSlug(currentSlug)) {
-    out = ensureMoneyLinkInFirstParagraph(out)
-  }
+  out = linkifyMoneyInFirstParagraph(out)
 
   // Inject 5 internal links — find keyword matches from target titles in the body
   // and replace the first occurrence with a markdown link. Skip text already
@@ -68,58 +71,23 @@ export function processArticleBody(content: string, currentSlug: string, all: Po
   return out
 }
 
-// Convert AT MOST ONE plain mention of the brand into a link to the money page.
-//  - Skip mentions already inside an existing markdown link [text](url).
-//  - Prefer the first **Brand** (bold) mention. If none, take the first plain mention.
-//  - All subsequent mentions stay as plain text — exactly one outbound money link
-//    per article, regardless of how many times the brand appears.
-function linkifyMoneyAnchor(content: string): string {
+// Place exactly ONE money-page link in the body, and that link MUST live in
+// the first paragraph (above the fold). All other brand mentions stay as
+// plain text. Behavior:
+//  1. Body already has a link to the money URL anywhere → leave as-is.
+//  2. First paragraph mentions the brand → link the first such occurrence.
+//  3. First paragraph has no mention but body does → append a localized
+//     "see our review of [Brand](url)" sentence to the first paragraph.
+//  4. Body has no mention at all → return as-is, no link added.
+function linkifyMoneyInFirstParagraph(content: string): string {
   const url = siteConfig.moneyPageUrl
   const anchor = siteConfig.moneyPageAnchor
   if (!anchor) return content
 
-  // Already linked anywhere? Then we're done — no further linkification.
-  const linkedRe = new RegExp(`\\[[^\\]]*${escapeReg(anchor)}[^\\]]*\\]\\(${escapeReg(url)}\\)`)
-  if (linkedRe.test(content)) return content
-
-  const parts = content.split(/(\[[^\]]*\]\([^)]+\))/g)
-  let replaced = false
-
-  // Pass 1: try to upgrade the FIRST **Brand** to a linked **Brand**.
-  for (let i = 0; i < parts.length && !replaced; i++) {
-    if (i % 2 === 1) continue // existing link — skip
-    const re = new RegExp(`\\*\\*${escapeReg(anchor)}\\*\\*`)
-    const m = parts[i].match(re)
-    if (m) {
-      parts[i] = parts[i].replace(re, `[**${anchor}**](${url})`)
-      replaced = true
-    }
-  }
-
-  // Pass 2: if no bold form, link the first plain mention.
-  if (!replaced) {
-    for (let i = 0; i < parts.length && !replaced; i++) {
-      if (i % 2 === 1) continue
-      const re = new RegExp(`(^|[^\\[\\*\\w])${escapeReg(anchor)}(?![\\w\\]\\*])`)
-      const m = parts[i].match(re)
-      if (m) {
-        parts[i] = parts[i].replace(re, `$1[${anchor}](${url})`)
-        replaced = true
-      }
-    }
-  }
-
-  return parts.join('')
-}
-
-function ensureMoneyLinkInFirstParagraph(content: string): string {
-  const url = siteConfig.moneyPageUrl
-  const anchor = siteConfig.moneyPageAnchor
-  if (!anchor) return content
-
-  // Already exactly one outbound money link somewhere in the body? Done —
-  // do not add another. Hard cap of 1 link per article.
   if (content.includes(`(${url})`)) return content
+
+  const anchorRe = new RegExp(escapeReg(anchor))
+  if (!anchorRe.test(content)) return content
 
   const lines = content.split('\n')
   let firstParaIdx = -1
@@ -131,9 +99,21 @@ function ensureMoneyLinkInFirstParagraph(content: string): string {
     break
   }
   if (firstParaIdx < 0) return content
-  // Append a sponsored link sentence to the first paragraph (only path that adds a link).
-  const tail = ` See our full guide on [${anchor}](${url}).`
-  lines[firstParaIdx] = lines[firstParaIdx].replace(/\s*$/, '') + tail
+
+  let para = lines[firstParaIdx]
+  const boldRe = new RegExp(`\\*\\*${escapeReg(anchor)}\\*\\*`)
+  const plainRe = new RegExp(`(^|[^\\[\\*\\w])${escapeReg(anchor)}(?![\\w\\]\\*])`)
+
+  if (boldRe.test(para)) {
+    para = para.replace(boldRe, `[**${anchor}**](${url})`)
+  } else if (plainRe.test(para)) {
+    para = para.replace(plainRe, `$1[${anchor}](${url})`)
+  } else {
+    const lang = (siteConfig.language || 'en') as keyof typeof FALLBACK_LEAD
+    const lead = (FALLBACK_LEAD[lang] ?? FALLBACK_LEAD.en)(anchor, url)
+    para = para.replace(/\s*$/, '') + lead
+  }
+  lines[firstParaIdx] = para
   return lines.join('\n')
 }
 
