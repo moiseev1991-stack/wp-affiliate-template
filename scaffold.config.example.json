@@ -18,15 +18,12 @@
     "bonus": "100% bonus do 4000 PLN"
   },
 
-  "donor": "https://competitor.pl",
-
   "repo": "moiseev1991-stack/example-pl",
 
   "pages": 50,
 
   "_env_vars_required": [
     "OPENAI_API_KEY      — used to generate the initial 50 articles AND the monthly cron",
-    "GITHUB_TOKEN        — used to push to <repo> and set repo secrets (or fall back to gh CLI)",
     "CLOUDFLARE_API_TOKEN  — optional, enables auto-deploy to Cloudflare Workers",
     "CLOUDFLARE_ACCOUNT_ID — optional, paired with CLOUDFLARE_API_TOKEN",
     "ANTHROPIC_API_KEY   — optional fallback for article generation if OPENAI_API_KEY is absent"

@@ -9,9 +9,9 @@
 //   cp scaffold.config.example.json scaffold.config.json
 //   # edit scaffold.config.json
 //   export OPENAI_API_KEY=…
-//   export GITHUB_TOKEN=…
-//   export CLOUDFLARE_API_TOKEN=…       # optional
-//   export CLOUDFLARE_ACCOUNT_ID=…      # optional
+//   export GITHUB_TOKEN=…                # optional, enables auto-push
+//   export CLOUDFLARE_API_TOKEN=…        # optional
+//   export CLOUDFLARE_ACCOUNT_ID=…       # optional
 //   node scripts/scaffold.mjs
 
 import fs from 'node:fs'

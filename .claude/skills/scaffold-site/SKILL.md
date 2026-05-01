@@ -24,8 +24,8 @@ Provide either:
   (a) scaffold.config.json in the current directory (cp scaffold.config.example.json scaffold.config.json and edit), or
   (b) SCAFFOLD_* env vars: SCAFFOLD_DOMAIN, SCAFFOLD_LANGUAGE, SCAFFOLD_NICHE, SCAFFOLD_MONEY_URL, SCAFFOLD_MONEY_ANCHOR, SCAFFOLD_MONEY_BONUS, SCAFFOLD_REPO.
 
-Required env (always): OPENAI_API_KEY, GITHUB_TOKEN.
-Optional env: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, ANTHROPIC_API_KEY.
+Required env (always): OPENAI_API_KEY.
+Optional env: GITHUB_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, ANTHROPIC_API_KEY.
 
 Then re-run /scaffold-site.
 ```

@@ -27,13 +27,12 @@ The scaffold-site skill takes these in one batch (no serial prompting):
 | Language     | ISO 639-1                                         | `pl`                                                                           |
 | Niche        | preset                                            | `casino`, `sports`, `crypto`, `health`, `design`, `generic`                    |
 | Money page   | `URL ‖ anchor ‖ bonus phrase`                     | `https://vulkankasyno.pl ‖ Vulkan Vegas ‖ 100% bonus do 4000 PLN`              |
-| Donor URL    | competitor / reference site                       | `https://competitor.pl`                                                        |
 | GitHub repo  | `owner/name` or full URL (must already exist)     | `moiseev1991-stack/example-pl`                                                 |
 | Page count   | integer                                           | `50` (default)                                                                 |
 
 Required env vars (read at runtime):
-- `GITHUB_TOKEN` — for the push (or fall back to `gh auth token`).
 - `OPENAI_API_KEY` — set as a repo secret for the monthly cron.
+- `GITHUB_TOKEN` — optional, enables auto-push (falls back to `gh auth token`).
 - `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` — set as repo secrets for the auto-deploy step. Optional — skip if absent.
 
 ## Pipeline (autonomous)
