@@ -1,15 +1,21 @@
-name: Monthly Post Generation
+name: Monthly Auto Post
 
-# Generates one new SEO article per month using OpenAI gpt-4o-mini, commits the
-# .mdx + .svg, then deploys the static site to Cloudflare Workers.
+# Fires daily; the generator script no-ops on every day except the site's
+# chosen monthly day (siteConfig.monthlyPostDay, picked deterministically from
+# the domain seed at scaffold time and stored in scripts/generation.config.json).
 #
-# Runs on the 1st of each month at 09:00 UTC (12:00 Moscow time).
-# Manual run via workflow_dispatch always available.
+# This means two sites scaffolded from the same template post on different
+# days of the month — no synchronized publishing pattern across the network.
 
 on:
   schedule:
-    - cron: '0 9 1 * *'
+    - cron: '0 9 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force generation regardless of day-of-month'
+        required: false
+        default: 'false'
 
 jobs:
   generate:
@@ -29,25 +35,37 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Generate post
+      - name: Generate post (gated by day-of-month)
         run: node scripts/generate-post.mjs
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
+          FORCE: ${{ github.event.inputs.force == 'true' && '1' || '' }}
 
-      - name: Commit and push
+      - name: Commit and push if a new post was created
         run: |
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
           git add content/posts/ public/illustrations/
-          git diff --staged --quiet || (git commit -m "content: add monthly auto post" && git push)
+          git diff --staged --quiet && echo "No new post today — nothing to commit." || (git commit -m "content: monthly auto post" && git push)
 
       - name: Build static site
-        run: npx next build
+        if: success()
+        run: |
+          if git log -1 --pretty=%B | grep -q "monthly auto post"; then
+            npx next build
+          else
+            echo "No new post — skipping build."
+          fi
 
       - name: Deploy to Cloudflare
         if: success() && env.CLOUDFLARE_API_TOKEN != ''
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy
+        run: |
+          if git log -1 --pretty=%B | grep -q "monthly auto post"; then
+            npx wrangler deploy
+          else
+            echo "No new post — skipping deploy."
+          fi

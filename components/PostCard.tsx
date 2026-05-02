@@ -1,11 +1,23 @@
 import Link from 'next/link'
 import type { Post } from '@/lib/posts'
+import { siteConfig } from '@/lib/config'
 
 interface Props {
   post: Post
   size?: 'normal' | 'large'
   customExcerpt?: React.ReactNode
 }
+
+const CARD_I18N: Record<string, { reading: string; readMore: string }> = {
+  pl: { reading: 'min czytania', readMore: 'Czytaj więcej' },
+  en: { reading: 'min read', readMore: 'Read more' },
+  de: { reading: 'Min. Lesezeit', readMore: 'Weiterlesen' },
+  cs: { reading: 'min čtení', readMore: 'Číst dále' },
+  sk: { reading: 'min čítania', readMore: 'Čítať ďalej' },
+  ru: { reading: 'мин чтения', readMore: 'Читать далее' },
+}
+
+const LOCALES: Record<string, string> = { pl: 'pl-PL', en: 'en-US', de: 'de-DE', cs: 'cs-CZ', sk: 'sk-SK', ru: 'ru-RU' }
 
 const THEMES: Record<string, {
   label: string
@@ -269,8 +281,8 @@ function VariationLayer({ v, slug }: { v: Variation; slug: string }) {
   )
 }
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })
+function formatDate(d: string, lang: string) {
+  return new Date(d).toLocaleDateString(LOCALES[lang] ?? 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 function readingTime(content: string) {
@@ -283,6 +295,8 @@ export default function PostCard({ post, size = 'normal', customExcerpt }: Props
   const mins = readingTime(post.content)
   const v = variationFor(post.slug)
   const excerpt = customExcerpt ?? post.description
+  const lang = (siteConfig.language || 'en') as keyof typeof CARD_I18N
+  const t = CARD_I18N[lang] ?? CARD_I18N.en
 
   return (
     <article className={`card-lift hentry type-post status-publish format-standard bg-[var(--bg-card)] rounded-2xl overflow-hidden border border-[var(--border)] flex flex-col group`} style={{ boxShadow: 'var(--shadow)' }}>
@@ -332,9 +346,9 @@ export default function PostCard({ post, size = 'normal', customExcerpt }: Props
 
       <div className="p-5 flex flex-col flex-1">
         <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mb-2.5">
-          <time dateTime={post.date} className="entry-date published">{formatDate(post.date)}</time>
+          <time dateTime={post.date} className="entry-date published">{formatDate(post.date, lang)}</time>
           <span className="w-1 h-1 rounded-full bg-[var(--border)]" />
-          <span>{mins} min czytania</span>
+          <span>{mins} {t.reading}</span>
         </div>
 
         <h3 className="entry-title font-heading text-lg font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors mb-2 leading-snug line-clamp-2">
@@ -349,7 +363,7 @@ export default function PostCard({ post, size = 'normal', customExcerpt }: Props
           href={`/${post.slug}/`}
           className="self-start inline-flex items-center gap-1.5 text-sm text-[var(--accent)] font-semibold hover:gap-3 transition-all"
         >
-          Czytaj więcej <span className="text-base">→</span>
+          {t.readMore} <span className="text-base">→</span>
         </Link>
       </div>
     </article>

@@ -5,6 +5,7 @@ import { siteConfig } from '@/lib/config'
 import { CATEGORY_BY_SLUG, EMOJI_TO_CATEGORY } from '@/lib/categories'
 import { pickMoneyTargetForSlug } from '@/lib/money'
 import { processArticleBody } from '@/lib/internal-links'
+import { getLayoutPreset } from '@/lib/uniqueness'
 import Breadcrumbs from '@/components/Breadcrumbs'
 import Sidebar from '@/components/Sidebar'
 import type { Metadata } from 'next'
@@ -84,6 +85,7 @@ export default function PostPage({ params }: Props) {
   const [c1, c2] = GRADIENTS[post.emoji] ?? ['#1a0d05', '#6a0723']
   const lang = (siteConfig.language || 'en') as keyof typeof I18N
   const t = I18N[lang] ?? I18N.en
+  const layout = getLayoutPreset()
 
   const processedContent = processArticleBody(post.content, post.slug, allPosts)
 
@@ -97,13 +99,18 @@ export default function PostPage({ params }: Props) {
     inLanguage: siteConfig.language,
   }
 
+  const sidebarSide = layout.sidebar
+  const wrapFlexDir = sidebarSide === 'left' ? 'lg:flex-row-reverse' : 'lg:flex-row'
+  const contentWidth = sidebarSide === 'none' ? 'lg:w-full' : 'lg:w-[65%]'
+  const sidebarWidth = sidebarSide === 'none' ? 'hidden' : 'lg:w-[35%]'
+
   return (
-    <div className="nv-content-wrap max-w-6xl mx-auto px-4 sm:px-6 py-10">
+    <div className="content-wrap entry-wrap max-w-6xl mx-auto px-4 sm:px-6 py-10">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <Breadcrumbs items={[{ label: post.title }]} />
 
-      <div className="flex flex-col lg:flex-row gap-10">
-        <div className="lg:w-[65%]">
+      <div className={`flex flex-col ${wrapFlexDir} gap-10`}>
+        <div className={contentWidth}>
           <article
             id={`post-${postId}`}
             className={`post-${postId} post type-post status-publish format-standard hentry category-${category} has-post-thumbnail`}
@@ -243,9 +250,9 @@ export default function PostPage({ params }: Props) {
           </div>
         </div>
 
-        <div className="lg:w-[35%] nv-sidebar-wrap">
+        <div className={`${sidebarWidth} sidebar-wrap`}>
           <div className="sticky top-20">
-            <Sidebar recentPosts={sidebarPosts} />
+            <Sidebar recentPosts={sidebarPosts} allPosts={allPosts} />
           </div>
         </div>
       </div>

@@ -22,11 +22,15 @@ export interface SiteConfig {
   moneyArticleSlugs: readonly string[]
 
   // Visual identity seed — distinguishes one scaffolded site from another.
+  // Drives lib/uniqueness.ts: menu preset, layout preset, emoji style, WP fingerprint.
   themeSeed?: string
 
   author: string
-  wpVersion: string
-  wpTheme: string
+
+  // Day of month (1..28) on which the monthly auto-post fires.
+  // Picked deterministically from themeSeed at scaffold time so each site has a
+  // different posting day. Stored here so the daily cron can compare.
+  monthlyPostDay: number
 }
 
 export const siteConfig: SiteConfig = {
@@ -48,6 +52,6 @@ export const siteConfig: SiteConfig = {
   themeSeed: "default",
 
   author: "Editorial team",
-  wpVersion: "6.5.2",
-  wpTheme: "neve",
+
+  monthlyPostDay: 17,
 }

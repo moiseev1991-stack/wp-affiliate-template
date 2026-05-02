@@ -1,17 +1,23 @@
 #!/usr/bin/env node
-// Monthly auto-post generator. Driven by scripts/generation.config.json
-// (written at scaffold-time by the scaffold-site skill) so this script never
-// has to be edited per-site.
+// MONTHLY auto-post generator.
+//
+// This script runs ONLY on the deployed server, ONLY from the monthly cron
+// workflow, and only on the chosen day-of-month for the site (siteConfig.monthlyPostDay).
+//
+// Behavior:
+//   - Generates ONE topical article in the site's language and niche.
+//   - The article has NO money links, NO money anchors, NO outbound brand
+//     mentions. Pure topical content.
+//   - Writes content/posts/<slug>.mdx + public/illustrations/<slug>.svg.
+//
+// This script is NEVER invoked at scaffold time. Scaffold-time articles are
+// produced by Claude Code via the /scaffold-site skill (Claude writes each
+// .mdx directly through its Write tool — no OpenAI involvement at scaffold).
 //
 // Inputs (env):
-//   OPENAI_API_KEY  required
-//   OPENAI_MODEL    default: gpt-4o-mini
-//   COUNT           default: 1 (number of articles to generate in this run)
-//   BACKDATE=1      optional: backdate posts up to 6 months for batch backfills
-//
-// Outputs:
-//   content/posts/<slug>.mdx
-//   public/illustrations/<slug>.svg
+//   OPENAI_API_KEY  required at runtime (only).
+//   OPENAI_MODEL    default: gpt-4o-mini.
+//   FORCE=1         optional: bypass the day-of-month gate (for manual runs).
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -19,7 +25,7 @@ import process from 'node:process'
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 if (!OPENAI_API_KEY) {
-  console.error('OPENAI_API_KEY is not set')
+  console.error('OPENAI_API_KEY is not set. Set the repo secret and re-run.')
   process.exit(1)
 }
 
@@ -30,7 +36,7 @@ const CONFIG_PATH = path.join(ROOT, 'scripts', 'generation.config.json')
 
 if (!fs.existsSync(CONFIG_PATH)) {
   console.error(`generation.config.json not found at ${CONFIG_PATH}.`)
-  console.error(`Run the scaffold-site skill first to write this config.`)
+  console.error(`Run /scaffold-site first — it writes this config.`)
   process.exit(1)
 }
 const CONFIG = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
@@ -39,20 +45,37 @@ const {
   language,
   languageName,
   niche,
-  moneyPageUrl,
-  moneyPageAnchor,
-  moneyPageBonus,
   topicCategories,
   allowedEmojis,
-  emojiGuide,
   siteName,
-  moneyBlockHeading,
-  moneyBlockBrief,
   responsibleDisclaimer,
+  monthlyPostDay,
 } = CONFIG
 
 if (!fs.existsSync(ILLUSTRATIONS_DIR)) fs.mkdirSync(ILLUSTRATIONS_DIR, { recursive: true })
 if (!fs.existsSync(POSTS_DIR)) fs.mkdirSync(POSTS_DIR, { recursive: true })
+
+// ─── Day-of-month gate ──────────────────────────────────────────────────────
+// Cron fires daily; generation only happens on the site's chosen day.
+
+function isPostingDay() {
+  if (process.env.FORCE === '1') return true
+  if (!monthlyPostDay) {
+    console.warn('No monthlyPostDay in generation.config.json — assuming day 1.')
+    return new Date().getUTCDate() === 1
+  }
+  return new Date().getUTCDate() === Number(monthlyPostDay)
+}
+
+if (!isPostingDay()) {
+  const today = new Date().getUTCDate()
+  console.log(`Today is day ${today} UTC. Site posts on day ${monthlyPostDay}. Skipping.`)
+  process.exit(0)
+}
+
+console.log(`Today is day ${monthlyPostDay} — generating monthly topical post.`)
+
+// ─── Existing posts (avoid duplicates) ─────────────────────────────────────
 
 function readExistingPosts() {
   const files = fs.readdirSync(POSTS_DIR).filter(f => f.endsWith('.mdx'))
@@ -67,6 +90,8 @@ function readExistingPosts() {
   }
   return { slugs, titles }
 }
+
+// ─── OpenAI client ──────────────────────────────────────────────────────────
 
 async function callOpenAI({ messages, jsonMode = false, maxTokens = 6000 }) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -90,25 +115,17 @@ async function callOpenAI({ messages, jsonMode = false, maxTokens = 6000 }) {
   return data.choices[0].message.content
 }
 
+// ─── Pick fresh topic ──────────────────────────────────────────────────────
+
 async function pickTopic({ existingSlugs, existingTitles }) {
-  // Hard-pinned topic: scaffold.mjs uses this to force the 5 money-article titles
-  // and the orchestrator passes them in via FORCE_TOPIC env (JSON-encoded).
-  if (process.env.FORCE_TOPIC) {
-    const forced = JSON.parse(process.env.FORCE_TOPIC)
-    if (!forced.slug || !forced.title || !forced.description || !forced.emoji) {
-      throw new Error('FORCE_TOPIC must include slug, title, description, emoji')
-    }
-    return forced
-  }
   const messages = [
     {
       role: 'system',
-      content:
-        `You are a content strategist for ${siteName} — a ${languageName}-language affiliate blog covering ${niche}. You always respond with strict JSON.`,
+      content: `You are a content strategist for ${siteName} — a ${languageName}-language editorial blog covering ${niche}. You always respond with strict JSON.`,
     },
     {
       role: 'user',
-      content: `Pick a fresh topic for a new SEO-optimized blog post in ${languageName}. The post must NOT duplicate any of the existing posts.
+      content: `Pick a fresh topic for a new SEO-optimized blog post in ${languageName}. The post must NOT duplicate any existing posts.
 
 Existing slugs:
 ${existingSlugs.map(s => `- ${s}`).join('\n')}
@@ -119,15 +136,15 @@ ${existingTitles.map(t => `- ${t}`).join('\n')}
 Good topic categories:
 ${topicCategories.map(c => `- ${c}`).join('\n')}
 
+The article will NOT contain any external brand links, sponsorships, or affiliate anchors. Pure topical editorial content.
+
 Pick ONE allowed emoji from this list that best fits the topic: ${allowedEmojis.join(' ')}.
-Emoji guide:
-${emojiGuide}
 
 Return strict JSON:
 {
   "slug": "lowercase-kebab-case-without-diacritics-max-50-chars",
-  "title": "${languageName} title, attention-grabbing, max 70 chars, Title Case, with em dash if useful",
-  "description": "SEO meta description in ${languageName}, max 155 chars, must mention concrete value (numbers, brand, percentages, etc.)",
+  "title": "${languageName} title, attention-grabbing, max 70 chars",
+  "description": "SEO meta description in ${languageName}, max 155 chars",
   "emoji": "one of: ${allowedEmojis.join(' ')}"
 }`,
     },
@@ -146,12 +163,13 @@ Return strict JSON:
   return parsed
 }
 
+// ─── SVG illustration ──────────────────────────────────────────────────────
+
 async function generateSvg({ slug, title, emoji }) {
   const messages = [
     {
       role: 'system',
-      content:
-        'You are an SVG illustrator. You return only raw SVG markup, no explanation, no markdown.',
+      content: 'You are an SVG illustrator. You return only raw SVG markup, no explanation, no markdown.',
     },
     {
       role: 'user',
@@ -164,9 +182,7 @@ Style requirements:
 - viewBox="0 0 320 180", width="320" height="180"
 - dark gradient background fitting the niche aesthetic
 - a centered circular badge / focal element
-- subtle decorative accents (stars, dots, lines) in corners
-- a thin bottom strip / label area
-- semi-transparent whites and one accent color
+- subtle decorative accents in corners
 - no text, no emoji, no raster images, no external fonts
 - clean, minimal, suitable as a thumbnail
 - self-contained, valid SVG
@@ -177,8 +193,7 @@ Return ONLY the SVG markup starting with <svg ...> and ending with </svg>.`,
   let svg = ''
   try {
     const raw = await callOpenAI({ messages, jsonMode: false, maxTokens: 2000 })
-    svg = raw.trim()
-    svg = svg.replace(/^```(?:svg|xml)?\s*/i, '').replace(/```\s*$/i, '').trim()
+    svg = raw.trim().replace(/^```(?:svg|xml)?\s*/i, '').replace(/```\s*$/i, '').trim()
     if (!svg.startsWith('<svg')) {
       console.warn('  SVG response invalid, falling back to placeholder')
       svg = ''
@@ -186,47 +201,39 @@ Return ONLY the SVG markup starting with <svg ...> and ending with </svg>.`,
   } catch (err) {
     console.warn('  SVG generation failed, falling back to placeholder:', err.message)
   }
-  if (!svg) {
-    svg = buildFallbackSvg({ slug, emoji })
-  }
-  const outPath = path.join(ILLUSTRATIONS_DIR, `${slug}.svg`)
-  fs.writeFileSync(outPath, svg, 'utf-8')
+  if (!svg) svg = buildFallbackSvg({ slug })
+  fs.writeFileSync(path.join(ILLUSTRATIONS_DIR, `${slug}.svg`), svg, 'utf-8')
   return `/illustrations/${slug}.svg`
 }
 
-function buildFallbackSvg({ slug, emoji }) {
+function buildFallbackSvg({ slug }) {
   const palette = CONFIG.fallbackPalette ?? ['#1e293b', '#334155', '#94a3b8']
   const [c1, c2, accent] = palette
   let hash = 0
   for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0
-  const cx = 160
-  const cy = 80
   return `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
   <defs>
     <linearGradient id="bg-${hash}" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="${c1}"/>
       <stop offset="100%" stop-color="${c2}"/>
     </linearGradient>
-    <pattern id="dots-${hash}" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="12" cy="12" r="1" fill="white" fill-opacity="0.15"/>
-    </pattern>
   </defs>
   <rect width="320" height="180" fill="url(#bg-${hash})"/>
-  <rect width="320" height="180" fill="url(#dots-${hash})"/>
-  <circle cx="${cx}" cy="${cy}" r="44" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.25" stroke-width="1.5"/>
-  <circle cx="${cx}" cy="${cy}" r="28" fill="${accent}" fill-opacity="0.55"/>
-  <circle cx="${cx}" cy="${cy}" r="14" fill="white" fill-opacity="0.7"/>
+  <circle cx="160" cy="80" r="44" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.25" stroke-width="1.5"/>
+  <circle cx="160" cy="80" r="28" fill="${accent}" fill-opacity="0.55"/>
+  <circle cx="160" cy="80" r="14" fill="white" fill-opacity="0.7"/>
   <rect x="0" y="160" width="320" height="20" fill="black" fill-opacity="0.25"/>
   <rect x="120" y="167" width="80" height="6" rx="3" fill="${accent}" fill-opacity="0.7"/>
 </svg>`
 }
 
+// ─── Outline + body ────────────────────────────────────────────────────────
+
 async function generateOutline({ title, description }) {
   const messages = [
     {
       role: 'system',
-      content:
-        `You are a senior content editor writing in ${languageName} for a ${niche} blog. You always respond with strict JSON.`,
+      content: `You are a senior content editor writing in ${languageName} for a ${niche} blog. You always respond with strict JSON.`,
     },
     {
       role: 'user',
@@ -237,14 +244,14 @@ Description: "${description}"
 
 Return strict JSON:
 {
-  "intro_points": ["3 concrete points to cover in the intro, in ${languageName} — hook + value proposition + what reader will learn"],
+  "intro_points": ["3 concrete points to cover in the intro, in ${languageName}"],
   "sections": [
     { "title": "## 1. Section title in ${languageName}", "key_points": ["point1", "point2", "point3", "point4"] },
     ... exactly 8 sections numbered 1 to 8
   ]
 }
 
-Make sections specific, practical, non-overlapping. Cover concrete details and numbers. Use ${languageName}.`,
+Make sections specific, practical, non-overlapping. Use ${languageName}.`,
     },
   ]
   const raw = await callOpenAI({ messages, jsonMode: true, maxTokens: 2000 })
@@ -256,17 +263,10 @@ Make sections specific, practical, non-overlapping. Cover concrete details and n
 }
 
 async function generateBody({ title, description, outline }) {
-  const isMoney = process.env.MONEY_ARTICLE === '1'
-  const moneyBlock = `After the 8 sections, add a section "## ${moneyBlockHeading}" (2-3 paragraphs) that naturally recommends [${moneyPageAnchor}](${moneyPageUrl}). ${moneyBlockBrief} Frame it as the editor's pick relevant to the article topic, not a hard sell.`
-  const moneyLeadInstruction = isMoney
-    ? `\n\nIMPORTANT: This is a money-focused article about ${moneyPageAnchor}. The FIRST paragraph of the intro must mention [${moneyPageAnchor}](${moneyPageUrl}) as a clickable markdown link. Refer to ${moneyPageAnchor} naturally throughout the article (5-8 mentions total). Mention the bonus phrase "${moneyPageBonus}" verbatim at least once in the body.`
-    : ''
-
   const messages = [
     {
       role: 'system',
-      content:
-        `You write long-form SEO articles in fluent, natural ${languageName} for a ${niche} affiliate blog. No fluff, no filler. Concrete, practical, useful.`,
+      content: `You write long-form SEO articles in fluent, natural ${languageName} for a ${niche} blog. No fluff, no filler. Concrete, practical, useful.`,
     },
     {
       role: 'user',
@@ -278,10 +278,8 @@ Description: "${description}"
 Intro must cover:
 ${outline.intro_points.map(p => `- ${p}`).join('\n')}
 
-Sections (write each section as ## heading + 200+ words of dense, useful ${languageName} prose, with **bold** key terms and concrete numbers):
+Sections (write each as ## heading + 200+ words of dense, useful ${languageName} prose, with **bold** key terms and concrete numbers):
 ${outline.sections.map(s => `${s.title}\n  Key points: ${s.key_points.join('; ')}`).join('\n\n')}
-
-${moneyBlock}${moneyLeadInstruction}
 
 End with a single italic disclaimer line in ${languageName}: ${responsibleDisclaimer}
 
@@ -289,7 +287,7 @@ Constraints:
 - Total length: at least 1600 words.
 - Use markdown headings (##), bold (**term**), and occasional bullet lists.
 - No H1, no frontmatter, no images, no code blocks.
-- Do NOT include the article title as a heading — start directly with the intro paragraphs.
+- DO NOT include any external URLs, brand recommendations, affiliate links, or "editor's pick" sections that link out. Pure topical content.
 - ${languageName} only.
 
 Return only the markdown body.`,
@@ -299,18 +297,8 @@ Return only the markdown body.`,
   return body.trim()
 }
 
-function getPostDate() {
-  if (process.env.BACKDATE === '1') {
-    const sixMonthsMs = 180 * 24 * 60 * 60 * 1000
-    const offset = Math.floor(Math.random() * sixMonthsMs)
-    return new Date(Date.now() - offset).toISOString().slice(0, 10)
-  }
-  return new Date().toISOString().slice(0, 10)
-}
-
 function buildMdx({ title, slug, description, emoji, image, body }) {
-  const today = getPostDate()
-  const featured = process.env.MONEY_ARTICLE === '1' ? 'true' : 'false'
+  const today = new Date().toISOString().slice(0, 10)
   const fm = [
     '---',
     `title: "${title.replace(/"/g, '\\"')}"`,
@@ -318,7 +306,7 @@ function buildMdx({ title, slug, description, emoji, image, body }) {
     `date: "${today}"`,
     `description: "${description.replace(/"/g, '\\"')}"`,
     `emoji: "${emoji}"`,
-    `featured: ${featured}`,
+    `featured: false`,
     `image: "${image}"`,
     '---',
     '',
@@ -327,6 +315,8 @@ function buildMdx({ title, slug, description, emoji, image, body }) {
   ].join('\n')
   return fm
 }
+
+// ─── Run ───────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log('→ Reading existing posts')
@@ -355,27 +345,7 @@ async function main() {
   console.log(`✓ Wrote ${outFile}`)
 }
 
-const COUNT = Math.max(1, parseInt(process.env.COUNT || '1', 10))
-
-async function runBatch() {
-  let ok = 0, fail = 0
-  for (let i = 1; i <= COUNT; i++) {
-    console.log(`\n========== Article ${i}/${COUNT} ==========`)
-    try {
-      await main()
-      ok++
-    } catch (err) {
-      fail++
-      console.error(`FAILED article ${i}:`, err.message || err)
-    }
-    if (i < COUNT) await new Promise(r => setTimeout(r, 1500))
-  }
-  console.log(`\n==========================================`)
-  console.log(`Batch done: ${ok} ok, ${fail} failed (of ${COUNT})`)
-  if (fail > 0 && ok === 0) process.exit(1)
-}
-
-runBatch().catch(err => {
-  console.error('BATCH FAILED:', err)
+main().catch(err => {
+  console.error('GENERATION FAILED:', err.message || err)
   process.exit(1)
 })

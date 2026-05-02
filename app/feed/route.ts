@@ -1,8 +1,10 @@
 import { getAllPosts } from '@/lib/posts'
 import { siteConfig } from '@/lib/config'
+import { getWpFingerprint } from '@/lib/uniqueness'
 
 export async function GET() {
   const posts = getAllPosts()
+  const wp = getWpFingerprint()
 
   const items = posts.map((p, i) => `
     <item>
@@ -24,7 +26,7 @@ export async function GET() {
     <link>${siteConfig.url}</link>
     <description>${siteConfig.description}</description>
     <language>${siteConfig.language || 'en'}</language>
-    <generator>https://wordpress.org/?v=${siteConfig.wpVersion}</generator>
+    <generator>https://wordpress.org/?v=${wp.wpVersion}</generator>
     ${items}
   </channel>
 </rss>`
